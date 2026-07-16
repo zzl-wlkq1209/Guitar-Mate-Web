@@ -434,6 +434,32 @@ function getSlotDisplay(slot: StrumSlot) {
   };
 }
 
+const copyToClipboard = async (text: string) => {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // iOS Safari can reject the Clipboard API even after a user gesture.
+    }
+  }
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    textarea.setSelectionRange(0, text.length);
+    const copied = document.execCommand("copy");
+    textarea.remove();
+    return copied;
+  } catch {
+    return false;
+  }
+};
+
 const getNextSlot = (
   meter: MeterId,
   slot: StrumSlot,
@@ -1228,8 +1254,8 @@ export default function App() {
       if (!response.ok || !result.token) throw new Error(shareRequestError(response.status, "生成分享口令失败。"));
       const message = `这是来自「Guitar Mate」的扫弦配置分享，30分钟内有效。分享口令为「${result.token}」`;
       setShareCode(result.token);
-      setShareStatus("分享口令已生成，有效期 30 分钟。");
-      void navigator.clipboard?.writeText(message).catch(() => undefined);
+      const copied = await copyToClipboard(message);
+      setShareStatus(copied ? "分享口令已复制，有效期 30 分钟。" : "分享口令已生成，请长按口令手动复制。");
     } catch (error) {
       setShareStatus(error instanceof Error && /[\u4e00-\u9fff]/.test(error.message) ? error.message : "网络连接失败，请检查网络后重试。");
     } finally {
