@@ -835,9 +835,16 @@ button:disabled {
 
 .latency-editor .latency-reset {
   margin-left: 0;
-  border-color: var(--orange);
-  background: var(--orange);
-  color: #ffffff;
+}
+
+.dark-mode .latency-editor .latency-reset {
+  border-color: var(--line);
+  background: var(--surface-strong);
+  color: var(--orange);
+}
+
+.settings-actions .settings-clear {
+  color: #c95c55;
 }
 
 .latency-editor input {

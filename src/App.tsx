@@ -1423,7 +1423,7 @@ export default function App() {
             <div className="settings-row settings-actions-row">
               <strong>配置</strong>
               <div className="settings-actions">
-                <button type="button" title="清空配置" aria-label="清空配置" onClick={() => setClearConfirmOpen(true)}>
+                <button className="settings-clear" type="button" title="清空配置" aria-label="清空配置" onClick={() => setClearConfirmOpen(true)}>
                   <Eraser size={19} />
                 </button>
                 <label title="导入配置" aria-label="导入配置">
