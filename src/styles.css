@@ -789,6 +789,22 @@ button:disabled {
   white-space: nowrap;
 }
 
+.share-code-display {
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 11px;
+  border: 1px solid var(--orange);
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.82rem;
+  letter-spacing: 0;
+  line-height: 1.5;
+  resize: none;
+  user-select: text;
+}
+
 .share-status {
   margin: 0;
   color: var(--orange);

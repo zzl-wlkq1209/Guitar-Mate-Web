@@ -531,6 +531,7 @@ export default function App() {
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [transferDialog, setTransferDialog] = useState<"import" | "export" | null>(null);
   const [shareCode, setShareCode] = useState("");
+  const [shareCopyFallback, setShareCopyFallback] = useState<string | null>(null);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
   const [shareBusy, setShareBusy] = useState(false);
   const [calibrationOpen, setCalibrationOpen] = useState(false);
@@ -1244,6 +1245,7 @@ export default function App() {
   const createShareCode = async () => {
     setShareBusy(true);
     setShareStatus(null);
+    setShareCopyFallback(null);
     try {
       const response = await fetch(shareApiUrl("create-share"), {
         method: "POST",
@@ -1255,7 +1257,12 @@ export default function App() {
       const message = `这是来自「Guitar Mate」的扫弦配置分享，30分钟内有效。分享口令为「${result.token}」`;
       setShareCode(result.token);
       const copied = await copyToClipboard(message);
-      setShareStatus(copied ? "分享口令已复制，有效期 30 分钟。" : "分享口令已生成，请长按口令手动复制。");
+      if (copied) {
+        setShareStatus("分享口令已复制，有效期 30 分钟。");
+      } else {
+        setShareCopyFallback(message);
+        setShareStatus("分享口令已生成，请长按上方文字复制。");
+      }
     } catch (error) {
       setShareStatus(error instanceof Error && /[\u4e00-\u9fff]/.test(error.message) ? error.message : "网络连接失败，请检查网络后重试。");
     } finally {
@@ -1526,6 +1533,7 @@ export default function App() {
                 </button>
                 <button type="button" title="导入配置" aria-label="导入配置" onClick={() => {
                   setShareCode("");
+                  setShareCopyFallback(null);
                   setShareStatus(null);
                   setTransferDialog("import");
                 }}>
@@ -1544,6 +1552,7 @@ export default function App() {
         <div className="overlay" role="presentation" onClick={() => {
           setTransferDialog(null);
           setShareCode("");
+          setShareCopyFallback(null);
           setShareStatus(null);
         }}>
           <section
@@ -1603,6 +1612,14 @@ export default function App() {
                   <Reply className="share-forward-icon" size={22} />
                   <span>{shareBusy ? "生成中..." : "生成分享口令"}</span>
                 </button>
+                {shareCopyFallback ? (
+                  <textarea
+                    className="share-code-display"
+                    readOnly
+                    value={shareCopyFallback}
+                    aria-label="完整分享文本，可长按复制"
+                  />
+                ) : null}
                 {shareStatus ? <p className="share-status">{shareStatus}</p> : null}
               </div>
             )}
