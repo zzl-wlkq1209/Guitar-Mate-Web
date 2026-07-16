@@ -1,11 +1,11 @@
 import { json, requirePost, supabase } from "./_supabase.mjs";
 
-export default async (event) => {
-  const rejected = requirePost(event);
+export default async (request) => {
+  const rejected = requirePost(request);
   if (rejected) return rejected;
 
   try {
-    const { payload } = JSON.parse(event.body ?? "{}");
+    const { payload } = await request.json();
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
       return json(400, { error: "Share data is invalid." });
     }

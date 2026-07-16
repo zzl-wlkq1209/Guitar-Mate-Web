@@ -14,9 +14,9 @@ export function json(statusCode, body) {
   });
 }
 
-export function requirePost(event) {
-  if (event.httpMethod === "OPTIONS") return json(204, {});
-  if (event.httpMethod !== "POST") return json(405, { error: "Only POST requests are supported." });
+export function requirePost(request) {
+  if (request.method === "OPTIONS") return json(204, {});
+  if (request.method !== "POST") return json(405, { error: "Only POST requests are supported." });
   if (!supabaseUrl || !serviceRoleKey) return json(500, { error: "Share service is not configured." });
   return null;
 }

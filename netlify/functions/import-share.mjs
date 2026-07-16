@@ -1,11 +1,11 @@
 import { json, requirePost, supabase } from "./_supabase.mjs";
 
-export default async (event) => {
-  const rejected = requirePost(event);
+export default async (request) => {
+  const rejected = requirePost(request);
   if (rejected) return rejected;
 
   try {
-    const { token } = JSON.parse(event.body ?? "{}");
+    const { token } = await request.json();
     if (typeof token !== "string" || !/^[a-f0-9]{32}$/i.test(token)) {
       return json(400, { error: "Share code format is invalid." });
     }
