@@ -1207,6 +1207,14 @@ export default function App() {
     }
   };
 
+  const shareRequestError = (status: number, fallback: string) => {
+    if (status === 404) return "分享口令不存在或已过期。";
+    if (status === 413) return "配置内容过大，无法生成分享口令。";
+    if (status === 500) return "分享服务尚未配置，请稍后再试。";
+    if (status >= 500) return "分享服务暂时不可用，请稍后再试。";
+    return fallback;
+  };
+
   const createShareCode = async () => {
     setShareBusy(true);
     setShareStatus(null);
@@ -1216,14 +1224,14 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ payload: createBackupPayload() }),
       });
-      const result = await response.json() as { token?: string; error?: string };
-      if (!response.ok || !result.token) throw new Error(result.error ?? "生成分享口令失败。");
+      const result = await response.json() as { token?: string };
+      if (!response.ok || !result.token) throw new Error(shareRequestError(response.status, "生成分享口令失败。"));
       const message = `这是来自「Guitar Mate」的扫弦配置分享，30分钟内有效。分享口令为「${result.token}」`;
-      await navigator.clipboard?.writeText(message);
       setShareCode(result.token);
-      setShareStatus("分享口令已复制，有效期 30 分钟。");
+      setShareStatus("分享口令已生成，有效期 30 分钟。");
+      void navigator.clipboard?.writeText(message).catch(() => undefined);
     } catch (error) {
-      setShareStatus(error instanceof Error ? error.message : "生成分享口令失败。");
+      setShareStatus(error instanceof Error && /[\u4e00-\u9fff]/.test(error.message) ? error.message : "网络连接失败，请检查网络后重试。");
     } finally {
       setShareBusy(false);
     }
@@ -1243,14 +1251,14 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token }),
       });
-      const result = await response.json() as { payload?: Partial<StoredState>; error?: string };
+      const result = await response.json() as { payload?: Partial<StoredState> };
       if (!response.ok || !result.payload || !applyBackupPayload(result.payload)) {
-        throw new Error(result.error ?? "导入分享口令失败。");
+        throw new Error(shareRequestError(response.status, "分享配置格式无效，无法导入。"));
       }
       setShareStatus("配置已导入。");
       setShareCode("");
     } catch (error) {
-      setShareStatus(error instanceof Error ? error.message : "导入分享口令失败。");
+      setShareStatus(error instanceof Error && /[\u4e00-\u9fff]/.test(error.message) ? error.message : "网络连接失败，请检查网络后重试。");
     } finally {
       setShareBusy(false);
     }
