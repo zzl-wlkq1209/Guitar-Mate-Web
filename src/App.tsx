@@ -1,7 +1,10 @@
 import {
   Check,
   Download,
+  Eraser,
+  Minus,
   Pencil,
+  Plus,
   Pause,
   Play,
   RotateCcw,
@@ -36,8 +39,6 @@ type SavedPattern = Practice & {
 type LoopItem = {
   id: string;
   sourceId: string;
-  name: string;
-  slots: StrumSlot[];
 };
 
 type WorkspaceState = {
@@ -268,18 +269,15 @@ const normalizeWorkspace = (
       slots: normalizeSlots(pattern.slots, config.slotCount),
     })),
     loopItems: (source?.loopItems ?? []).map((item) => ({
-      ...item,
       id: item.id ?? `loop-${Date.now()}-${Math.random()}`,
       sourceId: item.sourceId ?? item.id ?? "unknown",
-      name: item.name ?? "循环项",
-      slots: normalizeSlots(item.slots, config.slotCount),
     })),
     loopEnabled: Boolean(source?.loopEnabled),
   };
 };
 
 const defaultInitialState = (): InitialState => ({
-  bpm: 90,
+  bpm: 60,
   activeMeter: "fourFour",
   latencyMs: 0,
   fontSize: 2,
@@ -484,6 +482,7 @@ export default function App() {
   const [initialState] = useState(readInitialState);
   const initialWorkspace = initialState.workspaces[initialState.activeMeter];
   const [bpm, setBpm] = useState(initialState.bpm);
+  const [bpmInput, setBpmInput] = useState(String(initialState.bpm));
   const [activeMeter, setActiveMeter] = useState<MeterId>(initialState.activeMeter);
   const workspacesRef = useRef(initialState.workspaces);
   const [selectedId, setSelectedId] = useState(initialWorkspace.selectedId);
@@ -497,9 +496,11 @@ export default function App() {
   const [loopEnabled, setLoopEnabled] = useState(initialWorkspace.loopEnabled);
   const [activeLoopIndex, setActiveLoopIndex] = useState<number | null>(null);
   const [latencyMs, setLatencyMs] = useState(initialState.latencyMs);
+  const [latencyInput, setLatencyInput] = useState(String(initialState.latencyMs));
   const [fontSize, setFontSize] = useState(initialState.fontSize);
   const [darkMode, setDarkMode] = useState(initialState.darkMode);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [calibrationOpen, setCalibrationOpen] = useState(false);
   const [loopEditorOpen, setLoopEditorOpen] = useState(false);
   const [customEditorOpen, setCustomEditorOpen] = useState(false);
@@ -530,6 +531,7 @@ export default function App() {
   const loopEnabledRef = useRef(loopEnabled);
   const activeLoopIndexRef = useRef<number | null>(null);
   const playbackSlotsRef = useRef(slots);
+  const countInSlotsRef = useRef<StrumSlot[] | null>(null);
   const bpmRef = useRef(bpm);
   const latencyRef = useRef(latencyMs);
   const activeMeterRef = useRef(activeMeter);
@@ -546,6 +548,13 @@ export default function App() {
     loopItems,
     loopEnabled,
   });
+
+  const getLoopSource = useCallback(
+    (item: LoopItem): Practice | undefined =>
+      [...METER_CONFIG[activeMeterRef.current].practices, ...workspacesRef.current[activeMeterRef.current].savedPatterns]
+        .find((source) => source.id === item.sourceId),
+    [],
+  );
 
   const ensureAudioContext = useCallback(async () => {
     if (!audioContextRef.current) {
@@ -586,6 +595,10 @@ export default function App() {
   }, []);
 
   const stop = useCallback(() => {
+    const stoppedLoopItem =
+      activeLoopIndexRef.current === null
+        ? null
+        : loopItemsRef.current[activeLoopIndexRef.current] ?? null;
     clearTimers();
     setIsPlaying(false);
     setCountIn(null);
@@ -593,8 +606,18 @@ export default function App() {
     setActiveLoopIndex(null);
     activeLoopIndexRef.current = null;
     playbackSlotsRef.current = slotsRef.current;
+    countInSlotsRef.current = null;
     stepRef.current = 0;
-  }, [clearTimers]);
+    const stoppedLoopSource = stoppedLoopItem ? getLoopSource(stoppedLoopItem) : undefined;
+    if (stoppedLoopSource) {
+      const nextSlots = cloneSlots(stoppedLoopSource.slots);
+      slotsRef.current = nextSlots;
+      setSelectedId(stoppedLoopSource.id);
+      setCustomName(stoppedLoopSource.name);
+      setAdvancedMode(Boolean(stoppedLoopSource.advancedMode));
+      setSlots(nextSlots);
+    }
+  }, [clearTimers, getLoopSource]);
 
   const clearLongPressTimer = () => {
     if (longPressTimerRef.current !== null) {
@@ -640,10 +663,12 @@ export default function App() {
 
   useEffect(() => {
     bpmRef.current = bpm;
+    setBpmInput(String(bpm));
   }, [bpm]);
 
   useEffect(() => {
     latencyRef.current = latencyMs;
+    setLatencyInput(String(latencyMs));
   }, [latencyMs]);
 
   useEffect(() => {
@@ -671,8 +696,8 @@ export default function App() {
   );
 
   const displaySlots =
-    activeLoopIndex !== null && loopItems[activeLoopIndex]
-      ? loopItems[activeLoopIndex].slots
+    activeLoopIndex !== null && loopItems[activeLoopIndex] && getLoopSource(loopItems[activeLoopIndex])
+      ? getLoopSource(loopItems[activeLoopIndex])!.slots
       : slots;
 
   const beatGroups = useMemo(
@@ -727,7 +752,8 @@ export default function App() {
       }, loopVisualDelay);
       timerRef.current = window.setTimeout(() => {
         activeLoopIndexRef.current = nextLoopIndex;
-        playbackSlotsRef.current = loopItemsRef.current[nextLoopIndex].slots;
+        const nextLoopSource = getLoopSource(loopItemsRef.current[nextLoopIndex]);
+        playbackSlotsRef.current = nextLoopSource?.slots ?? slotsRef.current;
         stepRef.current = 0;
         schedulePatternStep();
       }, stepDuration);
@@ -754,9 +780,15 @@ export default function App() {
       timerRef.current = window.setTimeout(() => {
         setCountIn(null);
         stepRef.current = 0;
-        if (loopEnabledRef.current && loopItemsRef.current.length > 0) {
+        const countInSlots = countInSlotsRef.current;
+        countInSlotsRef.current = null;
+        if (countInSlots) {
+          activeLoopIndexRef.current = null;
+          playbackSlotsRef.current = countInSlots;
+          setActiveLoopIndex(null);
+        } else if (loopEnabledRef.current && loopItemsRef.current.length > 0) {
           activeLoopIndexRef.current = 0;
-          playbackSlotsRef.current = loopItemsRef.current[0].slots;
+          playbackSlotsRef.current = getLoopSource(loopItemsRef.current[0])?.slots ?? slotsRef.current;
           setActiveLoopIndex(0);
         } else {
           activeLoopIndexRef.current = null;
@@ -770,7 +802,7 @@ export default function App() {
 
     countRef.current = count - 1;
     timerRef.current = window.setTimeout(scheduleCountIn, 60_000 / bpmRef.current);
-  }, [schedulePatternStep]);
+  }, [getLoopSource, schedulePatternStep]);
 
   const togglePlayback = async () => {
     if (isPlaying) {
@@ -784,7 +816,19 @@ export default function App() {
     setPlayhead(null);
     setActiveLoopIndex(null);
     activeLoopIndexRef.current = null;
-    playbackSlotsRef.current = slotsRef.current;
+    const firstLoopItem = loopEnabled && loopItems.length > 0 ? loopItems[0] : null;
+    const firstLoopSource = firstLoopItem ? getLoopSource(firstLoopItem) : undefined;
+    if (firstLoopSource) {
+      const nextSlots = cloneSlots(firstLoopSource.slots);
+      slotsRef.current = nextSlots;
+      setSelectedId(firstLoopSource.id);
+      setCustomName(firstLoopSource.name);
+      setAdvancedMode(Boolean(firstLoopSource.advancedMode));
+      setSlots(nextSlots);
+      playbackSlotsRef.current = nextSlots;
+    } else {
+      playbackSlotsRef.current = slotsRef.current;
+    }
     stepRef.current = 0;
     countRef.current = 3;
     scheduleCountIn();
@@ -792,19 +836,23 @@ export default function App() {
 
   const playSlotsFromStart = (nextSlots: StrumSlot[]) => {
     clearTimers();
-    setCountIn(null);
     setPlayhead(null);
     setActiveLoopIndex(null);
     activeLoopIndexRef.current = null;
-    playbackSlotsRef.current = nextSlots;
+    countInSlotsRef.current = nextSlots;
     stepRef.current = 0;
-    schedulePatternStep();
+    countRef.current = 3;
+    scheduleCountIn();
   };
 
   const loadPractice = (practice: Practice) => {
     const nextSlots = cloneSlots(practice.slots);
     if (isPlaying) {
-      playSlotsFromStart(nextSlots);
+      if (loopEnabledRef.current && loopItemsRef.current.length > 0) {
+        stop();
+      } else {
+        playSlotsFromStart(nextSlots);
+      }
     } else {
       stop();
     }
@@ -953,10 +1001,24 @@ export default function App() {
       {
         id: `loop-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         sourceId: source.id,
-        name: source.name,
-        slots: cloneSlots(source.slots),
       },
     ]);
+  };
+
+  const previewLoopItem = (item: LoopItem) => {
+    if (isPlaying) {
+      stop();
+    }
+    const source = getLoopSource(item);
+    if (!source) {
+      return;
+    }
+    const nextSlots = cloneSlots(source.slots);
+    slotsRef.current = nextSlots;
+    setSelectedId(source.id);
+    setCustomName(source.name);
+    setAdvancedMode(Boolean(source.advancedMode));
+    setSlots(nextSlots);
   };
 
   const removeLoopItem = (id: string) => {
@@ -1055,11 +1117,9 @@ export default function App() {
       ...workspacesRef.current,
       [activeMeter]: currentWorkspace(),
     };
-    const payload: StoredState & { version: 1 } = {
+    const payload = {
       version: 1,
-      bpm,
       activeMeter,
-      latencyMs,
       fontSize,
       darkMode,
       workspaces: allWorkspaces,
@@ -1107,8 +1167,6 @@ export default function App() {
         slotsRef.current = nextWorkspace.slots;
         loopItemsRef.current = nextWorkspace.loopItems;
         loopEnabledRef.current = nextWorkspace.loopEnabled;
-        setBpm(clampBpm(parsed.bpm ?? bpm));
-        setLatencyMs(clampLatency(parsed.latencyMs ?? 0));
         setFontSize(Math.min(4, Math.max(0, Math.round(parsed.fontSize ?? 2))));
         setDarkMode(Boolean(parsed.darkMode));
         setActiveMeter(nextMeter);
@@ -1214,6 +1272,24 @@ export default function App() {
     setLatencyMs((current) => clampLatency(current + delta));
   };
 
+  const commitBpmInput = () => {
+    const value = Number(bpmInput);
+    if (Number.isFinite(value) && value >= 40 && value <= 220) {
+      setBpm(Math.round(value));
+    } else {
+      setBpmInput(String(bpm));
+    }
+  };
+
+  const commitLatencyInput = () => {
+    const value = Number(latencyInput);
+    if (Number.isFinite(value) && value >= -500 && value <= 1000) {
+      setLatencyMs(Math.round(value));
+    } else {
+      setLatencyInput(String(latencyMs));
+    }
+  };
+
   const changeAdvancedMode = (enabled: boolean) => {
     setAdvancedMode(enabled);
     if (selectedId.startsWith("saved-")) {
@@ -1225,12 +1301,33 @@ export default function App() {
     }
   };
 
+  const changeCustomName = (name: string) => {
+    setCustomName(name);
+  };
+
+  const clearConfiguration = () => {
+    window.localStorage.clear();
+    window.location.reload();
+  };
+
   const customSelected = isCustomId(selectedId);
   const lockedSlots =
     meterConfig.lockedIds.has(selectedId) ||
     activeLoopIndex !== null ||
     (isPlaying && loopEnabled && loopItems.length > 0);
   const loopSources = [...currentPractices, ...savedPatterns];
+
+  useEffect(() => {
+    const hasOverlay = settingsOpen || clearConfirmOpen || calibrationOpen || loopEditorOpen || customEditorOpen;
+    if (!hasOverlay) {
+      return;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [calibrationOpen, clearConfirmOpen, customEditorOpen, loopEditorOpen, settingsOpen]);
 
   return (
     <main className={["app-shell", darkMode ? "dark-mode" : ""].join(" ")} data-font-size={fontSize}>
@@ -1245,8 +1342,8 @@ export default function App() {
           <Settings size={21} />
         </button>
         <div className="title-trigger">
-          <p>Strumming simulator</p>
-          <h1>扫弦模拟器</h1>
+          <p>STRUMMING MATE</p>
+          <h1>扫弦跟练器</h1>
         </div>
         <div className="top-actions">
           <button
@@ -1310,7 +1407,7 @@ export default function App() {
             </div>
             <div className="settings-row settings-switch-row">
               <div>
-                <strong>Dark mode</strong>
+                <strong>深色模式</strong>
                 <span>{darkMode ? "夜间配色已启用" : "使用清新浅色配色"}</span>
               </div>
               <button
@@ -1322,6 +1419,54 @@ export default function App() {
               >
                 <span>{darkMode ? "开" : "关"}</span>
               </button>
+            </div>
+            <div className="settings-row settings-actions-row">
+              <strong>配置</strong>
+              <div className="settings-actions">
+                <button type="button" title="清空配置" aria-label="清空配置" onClick={() => setClearConfirmOpen(true)}>
+                  <Eraser size={19} />
+                </button>
+                <label title="导入配置" aria-label="导入配置">
+                  <Download size={19} />
+                  <input
+                    type="file"
+                    accept="application/json"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) {
+                        void importPattern(file);
+                      }
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+                <button type="button" title="导出配置" aria-label="导出配置" onClick={exportPattern}>
+                  <Upload size={19} />
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {clearConfirmOpen ? (
+        <div className="overlay confirmation-overlay" role="presentation" onClick={() => setClearConfirmOpen(false)}>
+          <section
+            className="floating-panel confirmation-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="确认清空配置"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="floating-header">
+              <div>
+                <strong>初始化配置？</strong>
+                <span>将清除所有本地数据并恢复默认状态。</span>
+              </div>
+            </div>
+            <div className="confirmation-actions">
+              <button type="button" onClick={() => setClearConfirmOpen(false)}>取消</button>
+              <button className="danger-button" type="button" onClick={clearConfiguration}>确认清空</button>
             </div>
           </section>
         </div>
@@ -1349,25 +1494,30 @@ export default function App() {
               <span>{isCalibrating ? "随节奏点击" : "开始校准"}</span>
             </button>
 
-            <div className="latency-editor" aria-label="手动调整延迟">
-              <button type="button" onClick={() => adjustLatency(-20)}>
-                -20
-              </button>
-              <label>
-                <span>手动</span>
+            <div className="latency-editor" aria-label="调整延迟">
+              <div className="latency-stepper">
+                <button type="button" title="减少 20ms" aria-label="减少 20ms" onClick={() => adjustLatency(-20)}>
+                  <Minus size={17} />
+                </button>
+                <label>
                 <input
-                  type="number"
-                  min={-500}
-                  max={1000}
-                  step={20}
-                  value={latencyMs}
-                  onChange={(event) => setLatencyMs(clampLatency(Number(event.target.value)))}
+                  type="text"
+                  inputMode="numeric"
+                  value={latencyInput}
+                  onChange={(event) => setLatencyInput(event.target.value)}
+                  onBlur={commitLatencyInput}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.currentTarget.blur();
+                    }
+                  }}
                 />
-              </label>
-              <button type="button" onClick={() => adjustLatency(20)}>
-                +20
-              </button>
-              <button className="icon-button latency-reset" type="button" title="重置为 0" onClick={resetLatency}>
+                </label>
+                <button type="button" title="增加 20ms" aria-label="增加 20ms" onClick={() => adjustLatency(20)}>
+                  <Plus size={17} />
+                </button>
+              </div>
+              <button className="icon-button latency-reset" type="button" title="重置为 0" aria-label="重置为 0" onClick={resetLatency}>
                 <RotateCcw size={18} />
               </button>
             </div>
@@ -1387,10 +1537,15 @@ export default function App() {
           <span>BPM</span>
           <input
             type="number"
-            min={40}
-            max={220}
-            value={bpm}
-            onChange={(event) => setBpm(clampBpm(Number(event.target.value)))}
+            inputMode="numeric"
+            value={bpmInput}
+            onChange={(event) => setBpmInput(event.target.value)}
+            onBlur={commitBpmInput}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.currentTarget.blur();
+              }
+            }}
           />
         </label>
         <input
@@ -1414,25 +1569,6 @@ export default function App() {
               </button>
             ))}
           </div>
-        <div className="share-actions">
-          <label className="icon-button file-button" title="导入">
-            <Download size={18} />
-            <input
-              type="file"
-              accept="application/json"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) {
-                  void importPattern(file);
-                }
-                event.currentTarget.value = "";
-              }}
-            />
-          </label>
-          <button className="icon-button" type="button" title="导出" onClick={exportPattern}>
-            <Upload size={18} />
-          </button>
-        </div>
         </div>
       </section>
 
@@ -1472,22 +1608,20 @@ export default function App() {
           </button>
         ))}
         <button
-          className={selectedId === "custom" ? "selected" : ""}
+          className={[selectedId === "custom" ? "selected" : "", "custom-entry"].join(" ")}
           type="button"
-          onPointerDown={beginCustomEditorPress}
-          onPointerLeave={endCustomEditorPress}
-          onPointerUp={() => {
-            endCustomEditorPress();
-          }}
-          onClick={() => {
-            if (customLongPressTriggeredRef.current) {
-              customLongPressTriggeredRef.current = false;
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            const inEditHotspot = event.clientX >= rect.right - 28 && event.clientY >= rect.bottom - 28;
+            if (inEditHotspot) {
+              setCustomEditorOpen(true);
               return;
             }
             clearCustom();
           }}
         >
-          自定义
+            自定义
+          <Pencil className="custom-edit-badge" size={12} aria-hidden="true" />
         </button>
       </section>
 
@@ -1496,7 +1630,7 @@ export default function App() {
           <input
             className="name-input"
             value={customName}
-            onChange={(event) => setCustomName(event.target.value)}
+            onChange={(event) => changeCustomName(event.target.value)}
             placeholder="给这个练习取个名字"
           />
           <div className="mode-switch">
@@ -1606,7 +1740,7 @@ export default function App() {
 
       {countIn !== null ? <div className="count-in">{countIn}</div> : null}
 
-      <section className="strum-board" aria-label="扫弦格">
+      <section className={["strum-board", `strum-board-${activeMeter}`].join(" ")} aria-label="扫弦格">
         {beatGroups.map((group) => (
           <article className="beat-card" key={group.beat}>
             {activeMeter === "fourFour" ? <h2>{BEAT_NAMES[group.beat]}</h2> : null}
@@ -1685,10 +1819,20 @@ export default function App() {
         {loopItems.length > 0 ? (
           <div className="loop-list loop-preview">
             {loopItems.map((item, index) => (
-              <div className={["loop-item", activeLoopIndex === index ? "active" : ""].join(" ")} key={item.id}>
-                <span>{index + 1}</span>
-                <strong>{item.name}</strong>
-              </div>
+              (() => {
+                const source = getLoopSource(item);
+                return source ? (
+                  <button
+                    className={["loop-item", activeLoopIndex === index ? "active" : ""].join(" ")}
+                    type="button"
+                    key={item.id}
+                    onClick={() => previewLoopItem(item)}
+                  >
+                    <span>{index + 1}</span>
+                    <strong>{source.name}</strong>
+                  </button>
+                ) : null;
+              })()
             ))}
           </div>
         ) : (
@@ -1735,6 +1879,9 @@ export default function App() {
             {loopItems.length > 0 ? (
               <div className="loop-list">
                 {loopItems.map((item, index) => (
+                  (() => {
+                    const source = getLoopSource(item);
+                    return source ? (
                   <div
                     className={[
                       "loop-item",
@@ -1767,7 +1914,7 @@ export default function App() {
                     }}
                   >
                     <span>{index + 1}</span>
-                    <strong>{item.name}</strong>
+                    <strong>{source.name}</strong>
                     <button
                       type="button"
                       title="删除循环项"
@@ -1780,6 +1927,8 @@ export default function App() {
                       <Trash2 size={15} />
                     </button>
                   </div>
+                    ) : null;
+                  })()
                 ))}
               </div>
             ) : (
