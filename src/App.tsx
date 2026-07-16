@@ -8,6 +8,7 @@ import {
   Pause,
   Play,
   RotateCcw,
+  Reply,
   Save,
   Settings,
   Trash2,
@@ -1489,7 +1490,11 @@ export default function App() {
                 <button className="settings-clear" type="button" title="清空配置" aria-label="清空配置" onClick={() => setClearConfirmOpen(true)}>
                   <Eraser size={19} />
                 </button>
-                <button type="button" title="导入配置" aria-label="导入配置" onClick={() => setTransferDialog("import")}>
+                <button type="button" title="导入配置" aria-label="导入配置" onClick={() => {
+                  setShareCode("");
+                  setShareStatus(null);
+                  setTransferDialog("import");
+                }}>
                   <Download size={19} />
                 </button>
                 <button type="button" title="导出配置" aria-label="导出配置" onClick={() => setTransferDialog("export")}>
@@ -1502,7 +1507,11 @@ export default function App() {
       ) : null}
 
       {transferDialog ? (
-        <div className="overlay" role="presentation" onClick={() => { setTransferDialog(null); setShareStatus(null); }}>
+        <div className="overlay" role="presentation" onClick={() => {
+          setTransferDialog(null);
+          setShareCode("");
+          setShareStatus(null);
+        }}>
           <section
             className="floating-panel transfer-panel"
             role="dialog"
@@ -1557,7 +1566,8 @@ export default function App() {
                   <span>导出备份文件</span>
                 </button>
                 <button className="transfer-option" type="button" disabled={shareBusy} onClick={() => void createShareCode()}>
-                  {shareBusy ? "生成中..." : "生成分享口令"}
+                  <Reply className="share-forward-icon" size={22} />
+                  <span>{shareBusy ? "生成中..." : "生成分享口令"}</span>
                 </button>
                 {shareStatus ? <p className="share-status">{shareStatus}</p> : null}
               </div>

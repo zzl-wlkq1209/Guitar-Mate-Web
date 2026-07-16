@@ -16,8 +16,8 @@ export function json(statusCode, body) {
 
 export function requirePost(request) {
   if (request.method === "OPTIONS") return json(204, {});
-  if (request.method !== "POST") return json(405, { error: "Only POST requests are supported." });
-  if (!supabaseUrl || !serviceRoleKey) return json(500, { error: "Share service is not configured." });
+  if (request.method !== "POST") return json(405, { error: "仅支持 POST 请求。" });
+  if (!supabaseUrl || !serviceRoleKey) return json(500, { error: "分享服务尚未配置。" });
   return null;
 }
 
