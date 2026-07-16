@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { shareApiUrl } from "./shareApi";
 
 type Direction = "down" | "up";
 type SlotMode = "empty" | "normal" | "mute" | "double";
@@ -501,6 +502,10 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(initialState.darkMode);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [transferDialog, setTransferDialog] = useState<"import" | "export" | null>(null);
+  const [shareCode, setShareCode] = useState("");
+  const [shareStatus, setShareStatus] = useState<string | null>(null);
+  const [shareBusy, setShareBusy] = useState(false);
   const [calibrationOpen, setCalibrationOpen] = useState(false);
   const [loopEditorOpen, setLoopEditorOpen] = useState(false);
   const [customEditorOpen, setCustomEditorOpen] = useState(false);
@@ -1112,18 +1117,51 @@ export default function App() {
     }
   };
 
-  const exportPattern = async () => {
+  const createBackupPayload = () => {
     const allWorkspaces = {
       ...workspacesRef.current,
       [activeMeter]: currentWorkspace(),
     };
-    const payload = {
+    return {
       version: 1,
       activeMeter,
       fontSize,
       darkMode,
       workspaces: allWorkspaces,
     };
+  };
+
+  const applyBackupPayload = (parsed: Partial<StoredState> & { workspaces?: StoredState["workspaces"] }) => {
+    if (!parsed.workspaces) return false;
+    const nextMeter = METERS.includes(parsed.activeMeter as MeterId)
+      ? (parsed.activeMeter as MeterId)
+      : activeMeter;
+    const nextWorkspaces = {
+      fourFour: normalizeWorkspace("fourFour", parsed.workspaces.fourFour),
+      sixEight: normalizeWorkspace("sixEight", parsed.workspaces.sixEight),
+    };
+    const nextWorkspace = nextWorkspaces[nextMeter];
+    stop();
+    workspacesRef.current = nextWorkspaces;
+    activeMeterRef.current = nextMeter;
+    slotsRef.current = nextWorkspace.slots;
+    loopItemsRef.current = nextWorkspace.loopItems;
+    loopEnabledRef.current = nextWorkspace.loopEnabled;
+    setFontSize(Math.min(4, Math.max(0, Math.round(parsed.fontSize ?? 2))));
+    setDarkMode(Boolean(parsed.darkMode));
+    setActiveMeter(nextMeter);
+    setSelectedId(nextWorkspace.selectedId);
+    setSlots(nextWorkspace.slots);
+    setCustomName(nextWorkspace.customName);
+    setAdvancedMode(nextWorkspace.advancedMode);
+    setSavedPatterns(nextWorkspace.savedPatterns);
+    setLoopItems(nextWorkspace.loopItems);
+    setLoopEnabled(nextWorkspace.loopEnabled);
+    return true;
+  };
+
+  const exportPattern = async () => {
+    const payload = createBackupPayload();
     const now = new Date();
     const timestamp = [
       now.getFullYear(),
@@ -1152,31 +1190,7 @@ export default function App() {
         advancedMode?: boolean;
         slots?: StrumSlot[];
       };
-      if (parsed.workspaces) {
-        const nextMeter = METERS.includes(parsed.activeMeter as MeterId)
-          ? (parsed.activeMeter as MeterId)
-          : activeMeter;
-        const nextWorkspaces = {
-          fourFour: normalizeWorkspace("fourFour", parsed.workspaces.fourFour),
-          sixEight: normalizeWorkspace("sixEight", parsed.workspaces.sixEight),
-        };
-        const nextWorkspace = nextWorkspaces[nextMeter];
-        stop();
-        workspacesRef.current = nextWorkspaces;
-        activeMeterRef.current = nextMeter;
-        slotsRef.current = nextWorkspace.slots;
-        loopItemsRef.current = nextWorkspace.loopItems;
-        loopEnabledRef.current = nextWorkspace.loopEnabled;
-        setFontSize(Math.min(4, Math.max(0, Math.round(parsed.fontSize ?? 2))));
-        setDarkMode(Boolean(parsed.darkMode));
-        setActiveMeter(nextMeter);
-        setSelectedId(nextWorkspace.selectedId);
-        setSlots(nextWorkspace.slots);
-        setCustomName(nextWorkspace.customName);
-        setAdvancedMode(nextWorkspace.advancedMode);
-        setSavedPatterns(nextWorkspace.savedPatterns);
-        setLoopItems(nextWorkspace.loopItems);
-        setLoopEnabled(nextWorkspace.loopEnabled);
+      if (applyBackupPayload(parsed)) {
         return;
       }
       if (!parsed.slots || parsed.slots.length !== slotCount) {
@@ -1189,6 +1203,55 @@ export default function App() {
       setSlots(normalizeSlots(parsed.slots, slotCount, true));
     } catch {
       return;
+    }
+  };
+
+  const createShareCode = async () => {
+    setShareBusy(true);
+    setShareStatus(null);
+    try {
+      const response = await fetch(shareApiUrl("create-share"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payload: createBackupPayload() }),
+      });
+      const result = await response.json() as { token?: string; error?: string };
+      if (!response.ok || !result.token) throw new Error(result.error ?? "生成分享口令失败。");
+      const message = `这是来自「Guitar Mate」的扫弦配置分享，30分钟内有效。分享口令为「${result.token}」`;
+      await navigator.clipboard?.writeText(message);
+      setShareCode(result.token);
+      setShareStatus("分享口令已复制，有效期 30 分钟。");
+    } catch (error) {
+      setShareStatus(error instanceof Error ? error.message : "生成分享口令失败。");
+    } finally {
+      setShareBusy(false);
+    }
+  };
+
+  const importShareCode = async () => {
+    const token = shareCode.match(/[a-f0-9]{32}/i)?.[0];
+    if (!token) {
+      setShareStatus("请粘贴有效的 32 位分享口令。");
+      return;
+    }
+    setShareBusy(true);
+    setShareStatus(null);
+    try {
+      const response = await fetch(shareApiUrl("import-share"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const result = await response.json() as { payload?: Partial<StoredState>; error?: string };
+      if (!response.ok || !result.payload || !applyBackupPayload(result.payload)) {
+        throw new Error(result.error ?? "导入分享口令失败。");
+      }
+      setShareStatus("配置已导入。");
+      setShareCode("");
+    } catch (error) {
+      setShareStatus(error instanceof Error ? error.message : "导入分享口令失败。");
+    } finally {
+      setShareBusy(false);
     }
   };
 
@@ -1318,7 +1381,7 @@ export default function App() {
   const loopSources = [...currentPractices, ...savedPatterns];
 
   useEffect(() => {
-    const hasOverlay = settingsOpen || clearConfirmOpen || calibrationOpen || loopEditorOpen || customEditorOpen;
+    const hasOverlay = settingsOpen || clearConfirmOpen || transferDialog !== null || calibrationOpen || loopEditorOpen || customEditorOpen;
     if (!hasOverlay) {
       return;
     }
@@ -1327,7 +1390,7 @@ export default function App() {
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [calibrationOpen, clearConfirmOpen, customEditorOpen, loopEditorOpen, settingsOpen]);
+  }, [calibrationOpen, clearConfirmOpen, customEditorOpen, loopEditorOpen, settingsOpen, transferDialog]);
 
   return (
     <main className={["app-shell", darkMode ? "dark-mode" : ""].join(" ")} data-font-size={fontSize}>
@@ -1426,8 +1489,38 @@ export default function App() {
                 <button className="settings-clear" type="button" title="清空配置" aria-label="清空配置" onClick={() => setClearConfirmOpen(true)}>
                   <Eraser size={19} />
                 </button>
-                <label title="导入配置" aria-label="导入配置">
+                <button type="button" title="导入配置" aria-label="导入配置" onClick={() => setTransferDialog("import")}>
                   <Download size={19} />
+                </button>
+                <button type="button" title="导出配置" aria-label="导出配置" onClick={() => setTransferDialog("export")}>
+                  <Upload size={19} />
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {transferDialog ? (
+        <div className="overlay" role="presentation" onClick={() => { setTransferDialog(null); setShareStatus(null); }}>
+          <section
+            className="floating-panel transfer-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label={transferDialog === "import" ? "导入配置" : "导出配置"}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="floating-header">
+              <div>
+                <strong>{transferDialog === "import" ? "导入配置" : "导出配置"}</strong>
+                <span>选择备份文件或分享口令</span>
+              </div>
+            </div>
+            {transferDialog === "import" ? (
+              <div className="transfer-options">
+                <label className="transfer-option">
+                  <Download size={20} />
+                  <span>从备份文件导入</span>
                   <input
                     type="file"
                     accept="application/json"
@@ -1435,16 +1528,40 @@ export default function App() {
                       const file = event.target.files?.[0];
                       if (file) {
                         void importPattern(file);
+                        setTransferDialog(null);
                       }
                       event.currentTarget.value = "";
                     }}
                   />
                 </label>
-                <button type="button" title="导出配置" aria-label="导出配置" onClick={exportPattern}>
-                  <Upload size={19} />
-                </button>
+                <div className="share-code-entry">
+                  <input
+                    value={shareCode}
+                    onChange={(event) => setShareCode(event.target.value)}
+                    placeholder="粘贴分享口令"
+                    aria-label="分享口令"
+                  />
+                  <button type="button" disabled={!shareCode.trim() || shareBusy} onClick={() => void importShareCode()}>
+                    {shareBusy ? "导入中..." : "从分享口令导入"}
+                  </button>
+                </div>
+                {shareStatus ? <p className="share-status">{shareStatus}</p> : null}
               </div>
-            </div>
+            ) : (
+              <div className="transfer-options">
+                <button className="transfer-option" type="button" onClick={() => {
+                  void exportPattern();
+                  setTransferDialog(null);
+                }}>
+                  <Upload size={20} />
+                  <span>导出备份文件</span>
+                </button>
+                <button className="transfer-option" type="button" disabled={shareBusy} onClick={() => void createShareCode()}>
+                  {shareBusy ? "生成中..." : "生成分享口令"}
+                </button>
+                {shareStatus ? <p className="share-status">{shareStatus}</p> : null}
+              </div>
+            )}
           </section>
         </div>
       ) : null}
