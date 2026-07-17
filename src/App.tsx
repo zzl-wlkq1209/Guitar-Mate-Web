@@ -16,7 +16,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { shareApiUrl } from "./shareApi";
 
 type Direction = "down" | "up";
@@ -52,9 +52,24 @@ type CustomSortDrag = {
   startPointerY: number;
   pointerY: number;
   centers: number[];
+  settling: boolean;
 };
 
 type LoopSortDrag = CustomSortDrag;
+
+type SharedWorkspace = Pick<WorkspaceState, "savedPatterns" | "loopItems">;
+
+type SharedPayload = {
+  version: 2;
+  kind: "guitar-mate-pattern-share";
+  workspaces: Record<MeterId, SharedWorkspace>;
+};
+
+type SharedImportResult = {
+  addedPatterns: number;
+  skippedPatterns: number;
+  importedLoopItems: number;
+};
 
 type WorkspaceState = {
   selectedId: string;
@@ -246,6 +261,12 @@ const clampLatency = (value: number) => Math.min(1000, Math.max(-500, Math.round
 const cloneSlots = (slots: StrumSlot[]) => slots.map((slot) => ({ ...slot }));
 const isCustomId = (id: string) => id === "custom" || id.startsWith("saved-");
 const hasSound = (slot: StrumSlot) => slot.mode !== "empty";
+const hasSamePatternContent = (left: SavedPattern, right: SavedPattern) =>
+  left.slots.length === right.slots.length &&
+  left.slots.every(
+    (slot, index) =>
+      slot.mode === right.slots[index]?.mode && slot.direction === right.slots[index]?.direction,
+  );
 
 const makeDefaultWorkspace = (meter: MeterId): WorkspaceState => {
   const config = METER_CONFIG[meter];
@@ -533,6 +554,8 @@ export default function App() {
   const [draggingSavedId, setDraggingSavedId] = useState<string | null>(null);
   const [customSortDrag, setCustomSortDrag] = useState<CustomSortDrag | null>(null);
   const [loopSortDrag, setLoopSortDrag] = useState<LoopSortDrag | null>(null);
+  const [customSortCommitting, setCustomSortCommitting] = useState(false);
+  const [loopSortCommitting, setLoopSortCommitting] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -554,9 +577,7 @@ export default function App() {
   const playbackSlotsRef = useRef(slots);
   const countInSlotsRef = useRef<StrumSlot[] | null>(null);
   const customSortDragRef = useRef<CustomSortDrag | null>(null);
-  const customSortDropRectsRef = useRef<Map<string, DOMRect> | null>(null);
   const loopSortDragRef = useRef<LoopSortDrag | null>(null);
-  const loopSortDropRectsRef = useRef<Map<string, DOMRect> | null>(null);
   const bpmRef = useRef(bpm);
   const latencyRef = useRef(latencyMs);
   const activeMeterRef = useRef(activeMeter);
@@ -1108,6 +1129,7 @@ export default function App() {
         const rect = row.getBoundingClientRect();
         return rect.top + rect.height / 2;
       }),
+      settling: false,
     };
     customSortDragRef.current = nextDrag;
     setDraggingSavedId(id);
@@ -1131,17 +1153,24 @@ export default function App() {
 
   const endCustomSortDrag = () => {
     const current = customSortDragRef.current;
-    customSortDropRectsRef.current = new Map(
-      Array.from(document.querySelectorAll<HTMLElement>('[data-sort-kind="saved"]'))
-        .map((row) => [row.dataset.sortId!, row.getBoundingClientRect()]),
-    );
-    if (current && current.targetIndex !== current.sourceIndex) {
-      const targetId = savedPatterns[current.targetIndex]?.id;
-      if (targetId) reorderSavedPatterns(current.id, targetId);
-    }
     customSortDragRef.current = null;
     setDraggingSavedId(null);
-    setCustomSortDrag(null);
+    if (!current) return;
+    const targetOffset = current.centers[current.targetIndex] - current.centers[current.sourceIndex];
+    setCustomSortDrag({
+      ...current,
+      pointerY: current.startPointerY + targetOffset,
+      settling: true,
+    });
+    window.setTimeout(() => {
+      setCustomSortCommitting(true);
+      if (current.targetIndex !== current.sourceIndex) {
+        const targetId = savedPatterns[current.targetIndex]?.id;
+        if (targetId) reorderSavedPatterns(current.id, targetId);
+      }
+      setCustomSortDrag(null);
+      requestAnimationFrame(() => setCustomSortCommitting(false));
+    }, 300);
   };
 
   const beginLoopSortDrag = (event: React.PointerEvent<HTMLElement>, id: string) => {
@@ -1161,6 +1190,7 @@ export default function App() {
         const rect = row.getBoundingClientRect();
         return rect.top + rect.height / 2;
       }),
+      settling: false,
     };
     loopSortDragRef.current = nextDrag;
     setLoopSortDrag(nextDrag);
@@ -1179,43 +1209,39 @@ export default function App() {
     return undefined;
   };
 
-  const endLoopSortDrag = () => {
-    const current = loopSortDragRef.current;
-    loopSortDropRectsRef.current = new Map(
-      Array.from(document.querySelectorAll<HTMLElement>('[data-sort-kind="loop"]'))
-        .map((row) => [row.dataset.sortId!, row.getBoundingClientRect()]),
-    );
-    if (current && current.targetIndex !== current.sourceIndex) {
-      const targetId = loopItems[current.targetIndex]?.id;
-      if (targetId) reorderLoopItems(current.id, targetId);
+  const getLoopDisplayNumber = (index: number) => {
+    if (!loopSortDrag?.settling) return index + 1;
+    const { sourceIndex, targetIndex } = loopSortDrag;
+    if (index === sourceIndex) return targetIndex + 1;
+    if (targetIndex > sourceIndex && index > sourceIndex && index <= targetIndex) {
+      return index;
     }
-    loopSortDragRef.current = null;
-    setLoopSortDrag(null);
+    if (targetIndex < sourceIndex && index >= targetIndex && index < sourceIndex) {
+      return index + 2;
+    }
+    return index + 1;
   };
 
-  // On release, animate from the exact visual positions into the committed order.
-  useLayoutEffect(() => {
-    const previous = customSortDropRectsRef.current;
-    if (!previous || customSortDrag) return;
-    const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-sort-kind="saved"]'));
-    rows.forEach((row) => {
-      const before = previous.get(row.dataset.sortId!);
-      if (!before) return;
-      const after = row.getBoundingClientRect();
-      const deltaY = before.top - after.top;
-      if (Math.abs(deltaY) < 1) return;
-      row.style.transition = "none";
-      row.style.transform = `translateY(${deltaY}px)`;
-      // Force the visual release position before transitioning to the new slot.
-      void row.offsetHeight;
-      requestAnimationFrame(() => {
-        row.style.transition = "transform 240ms cubic-bezier(0.22, 1, 0.36, 1)";
-        row.style.removeProperty("transform");
-        window.setTimeout(() => row.style.removeProperty("transition"), 250);
-      });
+  const endLoopSortDrag = () => {
+    const current = loopSortDragRef.current;
+    loopSortDragRef.current = null;
+    if (!current) return;
+    const targetOffset = current.centers[current.targetIndex] - current.centers[current.sourceIndex];
+    setLoopSortDrag({
+      ...current,
+      pointerY: current.startPointerY + targetOffset,
+      settling: true,
     });
-    customSortDropRectsRef.current = null;
-  }, [customSortDrag, savedPatterns]);
+    window.setTimeout(() => {
+      setLoopSortCommitting(true);
+      if (current.targetIndex !== current.sourceIndex) {
+        const targetId = loopItems[current.targetIndex]?.id;
+        if (targetId) reorderLoopItems(current.id, targetId);
+      }
+      setLoopSortDrag(null);
+      requestAnimationFrame(() => setLoopSortCommitting(false));
+    }, 300);
+  };
 
   useEffect(() => {
     if (!customSortDrag) return;
@@ -1223,8 +1249,13 @@ export default function App() {
       const current = customSortDragRef.current;
       if (!current || event.pointerId !== current.pointerId) return;
       if (event.cancelable) event.preventDefault();
-      const crossedCount = current.centers.filter((center) => event.clientY >= center).length;
-      const targetIndex = Math.max(0, Math.min(current.centers.length - 1, crossedCount - 1));
+      // Compare the dragged row's center, not the pointer, against every row center.
+      const draggedCenter =
+        current.centers[current.sourceIndex] + (event.clientY - current.startPointerY);
+      // Treat the dragged item as removed: only crossing another row's center changes its slot.
+      const targetIndex = current.centers.filter(
+        (center, index) => index !== current.sourceIndex && draggedCenter >= center,
+      ).length;
       const nextDrag = { ...current, pointerY: event.clientY, targetIndex };
       customSortDragRef.current = nextDrag;
       setCustomSortDrag(nextDrag);
@@ -1248,8 +1279,11 @@ export default function App() {
       const current = loopSortDragRef.current;
       if (!current || event.pointerId !== current.pointerId) return;
       if (event.cancelable) event.preventDefault();
-      const crossedCount = current.centers.filter((center) => event.clientY >= center).length;
-      const targetIndex = Math.max(0, Math.min(current.centers.length - 1, crossedCount - 1));
+      const draggedCenter =
+        current.centers[current.sourceIndex] + (event.clientY - current.startPointerY);
+      const targetIndex = current.centers.filter(
+        (center, index) => index !== current.sourceIndex && draggedCenter >= center,
+      ).length;
       const nextDrag = { ...current, pointerY: event.clientY, targetIndex };
       loopSortDragRef.current = nextDrag;
       setLoopSortDrag(nextDrag);
@@ -1266,28 +1300,6 @@ export default function App() {
       window.removeEventListener("pointercancel", onPointerEnd);
     };
   }, [loopSortDrag]);
-
-  useLayoutEffect(() => {
-    const previous = loopSortDropRectsRef.current;
-    if (!previous || loopSortDrag) return;
-    const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-sort-kind="loop"]'));
-    rows.forEach((row) => {
-      const before = previous.get(row.dataset.sortId!);
-      if (!before) return;
-      const after = row.getBoundingClientRect();
-      const deltaY = before.top - after.top;
-      if (Math.abs(deltaY) < 1) return;
-      row.style.transition = "none";
-      row.style.transform = `translateY(${deltaY}px)`;
-      void row.offsetHeight;
-      requestAnimationFrame(() => {
-        row.style.transition = "transform 240ms cubic-bezier(0.22, 1, 0.36, 1)";
-        row.style.removeProperty("transform");
-        window.setTimeout(() => row.style.removeProperty("transition"), 250);
-      });
-    });
-    loopSortDropRectsRef.current = null;
-  }, [loopItems, loopSortDrag]);
 
   const beginCustomEditorPress = () => {
     clearLongPressTimer();
@@ -1318,53 +1330,99 @@ export default function App() {
     }
   };
 
-  const createBackupPayload = () => {
+  const createSharePayload = (): SharedPayload => {
     const allWorkspaces = {
       ...workspacesRef.current,
       [activeMeter]: currentWorkspace(),
     };
     return {
-      version: 1,
-      activeMeter,
-      fontSize,
-      darkMode,
-      workspaces: allWorkspaces,
+      version: 2,
+      kind: "guitar-mate-pattern-share",
+      workspaces: {
+        fourFour: {
+          savedPatterns: allWorkspaces.fourFour.savedPatterns,
+          loopItems: allWorkspaces.fourFour.loopItems,
+        },
+        sixEight: {
+          savedPatterns: allWorkspaces.sixEight.savedPatterns,
+          loopItems: allWorkspaces.sixEight.loopItems,
+        },
+      },
     };
   };
 
-  const applyBackupPayload = (parsed: Partial<StoredState> & { workspaces?: StoredState["workspaces"] }) => {
-    if (!parsed.workspaces) {
-      return false;
+  const importSharedPayload = (parsed: Partial<SharedPayload>): SharedImportResult | null => {
+    if (parsed.kind !== "guitar-mate-pattern-share" || !parsed.workspaces) {
+      return null;
     }
-    const nextMeter = METERS.includes(parsed.activeMeter as MeterId)
-      ? (parsed.activeMeter as MeterId)
-      : activeMeter;
-    const nextWorkspaces = {
-      fourFour: normalizeWorkspace("fourFour", parsed.workspaces.fourFour),
-      sixEight: normalizeWorkspace("sixEight", parsed.workspaces.sixEight),
+    const allWorkspaces = {
+      ...workspacesRef.current,
+      [activeMeter]: currentWorkspace(),
     };
-    const nextWorkspace = nextWorkspaces[nextMeter];
-    stop();
+    const nextWorkspaces = { ...allWorkspaces };
+    let addedPatterns = 0;
+    let skippedPatterns = 0;
+    let importedLoopItems = 0;
+
+    METERS.forEach((meter) => {
+      const imported = parsed.workspaces?.[meter];
+      if (!imported) return;
+      const current = allWorkspaces[meter];
+      const importedPatterns = (imported.savedPatterns ?? []).map((pattern) => ({
+        ...pattern,
+        advancedMode: Boolean(pattern.advancedMode),
+        slots: normalizeSlots(pattern.slots, METER_CONFIG[meter].slotCount),
+      }));
+      const mergedPatterns = [...current.savedPatterns];
+      const sourceToLocalId = new Map<string, string>();
+
+      importedPatterns.forEach((pattern) => {
+        const match = mergedPatterns.find((existing) => hasSamePatternContent(existing, pattern));
+        if (match) {
+          skippedPatterns += 1;
+          sourceToLocalId.set(pattern.id, match.id);
+          return;
+        }
+        const localId = `saved-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        mergedPatterns.push({ ...pattern, id: localId });
+        addedPatterns += 1;
+        sourceToLocalId.set(pattern.id, localId);
+      });
+
+      const knownIds = new Set([
+        ...METER_CONFIG[meter].practices.map((practice) => practice.id),
+        ...mergedPatterns.map((pattern) => pattern.id),
+      ]);
+      const nextLoopItems = current.loopItems.length > 0
+        ? current.loopItems
+        : (imported.loopItems ?? [])
+            .map((item) => {
+              const sourceId = sourceToLocalId.get(item.sourceId) ?? item.sourceId;
+              return knownIds.has(sourceId)
+                ? { id: `loop-${Date.now()}-${Math.random().toString(36).slice(2)}`, sourceId }
+                : null;
+            })
+            .filter((item): item is LoopItem => item !== null);
+
+      nextWorkspaces[meter] = {
+        ...current,
+        savedPatterns: mergedPatterns,
+        loopItems: nextLoopItems,
+      };
+      if (current.loopItems.length === 0) {
+        importedLoopItems += nextLoopItems.length;
+      }
+    });
+
+    const nextWorkspace = nextWorkspaces[activeMeter];
     workspacesRef.current = nextWorkspaces;
-    activeMeterRef.current = nextMeter;
-    slotsRef.current = nextWorkspace.slots;
-    loopItemsRef.current = nextWorkspace.loopItems;
-    loopEnabledRef.current = nextWorkspace.loopEnabled;
-    setFontSize(Math.min(4, Math.max(0, Math.round(parsed.fontSize ?? 2))));
-    setDarkMode(Boolean(parsed.darkMode));
-    setActiveMeter(nextMeter);
-    setSelectedId(nextWorkspace.selectedId);
-    setSlots(nextWorkspace.slots);
-    setCustomName(nextWorkspace.customName);
-    setAdvancedMode(nextWorkspace.advancedMode);
     setSavedPatterns(nextWorkspace.savedPatterns);
     setLoopItems(nextWorkspace.loopItems);
-    setLoopEnabled(nextWorkspace.loopEnabled);
-    return true;
+    return { addedPatterns, skippedPatterns, importedLoopItems };
   };
 
   const exportPattern = () => {
-    const payload = createBackupPayload();
+    const payload = createSharePayload();
     const now = new Date();
     const timestamp = [
       now.getFullYear(),
@@ -1389,7 +1447,7 @@ export default function App() {
         advancedMode?: boolean;
         slots?: StrumSlot[];
       };
-      if (applyBackupPayload(parsed)) {
+      if (importSharedPayload(parsed)) {
         return;
       }
       if (!parsed.slots || parsed.slots.length !== slotCount) {
@@ -1421,7 +1479,7 @@ export default function App() {
       const response = await fetch(shareApiUrl("create-share"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ payload: createBackupPayload() }),
+        body: JSON.stringify({ payload: createSharePayload() }),
       });
       const result = await response.json() as { token?: string };
       if (!response.ok || !result.token) throw new Error(shareRequestError(response.status, "生成分享口令失败。"));
@@ -1456,11 +1514,18 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token }),
       });
-      const result = await response.json() as { payload?: Partial<StoredState> };
-      if (!response.ok || !result.payload || !applyBackupPayload(result.payload)) {
+      const result = await response.json() as { payload?: Partial<SharedPayload> };
+      const importResult = response.ok && result.payload ? importSharedPayload(result.payload) : null;
+      if (!importResult) {
         throw new Error(shareRequestError(response.status, "分享配置格式无效，无法导入。"));
       }
-      setShareStatus("配置已导入。");
+      setShareStatus(
+        importResult.addedPatterns > 0
+          ? `已导入 ${importResult.addedPatterns} 个节奏型${importResult.importedLoopItems > 0 ? "及循环列表" : ""}。`
+          : importResult.skippedPatterns > 0
+            ? "请勿重复导入配置。"
+            : "分享内容中没有可导入的节奏型。",
+      );
       setShareCode("");
     } catch (error) {
       setShareStatus(error instanceof Error && /[\u4e00-\u9fff]/.test(error.message) ? error.message : "网络连接失败，请检查网络后重试。");
@@ -2033,6 +2098,10 @@ export default function App() {
                     className={[
                       "saved-item",
                       customSortDrag?.id === pattern.id ? "custom-sorting" : "",
+                      customSortDrag?.id === pattern.id && customSortDrag.settling
+                        ? "custom-settling"
+                        : "",
+                      customSortCommitting ? "sort-committing" : "",
                     ].join(" ")}
                     key={pattern.id}
                     data-sort-id={pattern.id}
@@ -2227,6 +2296,10 @@ export default function App() {
                     className={[
                       "loop-editor-row",
                       loopSortDrag?.id === item.id ? "loop-sorting" : "",
+                      loopSortDrag?.id === item.id && loopSortDrag.settling
+                        ? "loop-settling"
+                        : "",
+                      loopSortCommitting ? "sort-committing" : "",
                     ].join(" ")}
                     key={item.id}
                     data-sort-id={item.id}
@@ -2246,7 +2319,7 @@ export default function App() {
                       "loop-item",
                       activeLoopIndex === index ? "active" : "",
                     ].join(" ")}>
-                      <span>{index + 1}</span>
+                      <span>{getLoopDisplayNumber(index)}</span>
                       <strong>{source.name}</strong>
                       <button
                         type="button"

@@ -791,7 +791,7 @@ button:disabled {
 
 .share-code-display {
   width: 100%;
-  min-height: 72px;
+  min-height: 0;
   padding: 10px 11px;
   border: 1px solid var(--orange);
   border-radius: var(--radius);
@@ -801,6 +801,7 @@ button:disabled {
   font-size: 0.82rem;
   letter-spacing: 0;
   line-height: 1.5;
+  field-sizing: content;
   resize: none;
   user-select: text;
 }
@@ -1059,6 +1060,15 @@ button:disabled {
   will-change: transform;
 }
 
+.saved-item.custom-sorting.custom-settling {
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.saved-item.sort-committing,
+.loop-editor-row.sort-committing {
+  transition: none !important;
+}
+
 .drag-handle {
   display: grid;
   width: 30px;
@@ -1282,6 +1292,10 @@ button:disabled {
   pointer-events: none;
   transition: none;
   will-change: transform;
+}
+
+.loop-editor-row.loop-sorting.loop-settling {
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .loop-editor-row .loop-item {
