@@ -1044,22 +1044,50 @@ button:disabled {
 
 .saved-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 38px;
+  grid-template-columns: 30px minmax(0, 1fr) 38px;
   gap: 6px;
-  touch-action: none;
   transition:
-    transform 150ms ease,
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 150ms ease,
     box-shadow 150ms ease;
 }
 
-.saved-item.dragging,
-.loop-item.dragging {
-  cursor: grabbing;
-  opacity: 0.86;
+.saved-item.custom-sorting {
+  z-index: 2;
+  pointer-events: none;
+  transition: none;
+  will-change: transform;
+}
+
+.drag-handle {
+  display: grid;
+  width: 30px;
+  min-width: 30px;
+  height: 38px;
+  place-items: center;
+  border-radius: var(--radius);
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
   user-select: none;
-  transform: translateY(-3px) scale(1.015);
-  filter: drop-shadow(0 14px 22px rgba(46, 67, 94, 0.18));
+  -webkit-touch-callout: none;
+}
+
+.drag-handle {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.saved-item.dragging {
+  position: relative;
+  z-index: 2;
+  user-select: none;
+  will-change: transform;
 }
 
 .saved-load,
@@ -1238,6 +1266,26 @@ button:disabled {
 .loop-list {
   display: grid;
   gap: 7px;
+}
+
+/* Keep the original loop card intact; the handle is a separate control beside it. */
+.loop-editor-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  transition: transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.loop-editor-row.loop-sorting {
+  z-index: 2;
+  pointer-events: none;
+  transition: none;
+  will-change: transform;
+}
+
+.loop-editor-row .loop-item {
+  min-width: 0;
 }
 
 .loop-preview .loop-item {

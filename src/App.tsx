@@ -2,6 +2,7 @@ import {
   Check,
   Download,
   Eraser,
+  List,
   Minus,
   Pencil,
   Plus,
@@ -15,7 +16,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { shareApiUrl } from "./shareApi";
 
 type Direction = "down" | "up";
@@ -42,6 +43,18 @@ type LoopItem = {
   id: string;
   sourceId: string;
 };
+
+type CustomSortDrag = {
+  id: string;
+  pointerId: number;
+  sourceIndex: number;
+  targetIndex: number;
+  startPointerY: number;
+  pointerY: number;
+  centers: number[];
+};
+
+type LoopSortDrag = CustomSortDrag;
 
 type WorkspaceState = {
   selectedId: string;
@@ -434,32 +447,6 @@ function getSlotDisplay(slot: StrumSlot) {
   };
 }
 
-const copyToClipboard = async (text: string) => {
-  if (navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      // iOS Safari can reject the Clipboard API even after a user gesture.
-    }
-  }
-  try {
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.setAttribute("readonly", "");
-    textarea.style.position = "fixed";
-    textarea.style.opacity = "0";
-    document.body.appendChild(textarea);
-    textarea.select();
-    textarea.setSelectionRange(0, text.length);
-    const copied = document.execCommand("copy");
-    textarea.remove();
-    return copied;
-  } catch {
-    return false;
-  }
-};
-
 const getNextSlot = (
   meter: MeterId,
   slot: StrumSlot,
@@ -544,7 +531,8 @@ export default function App() {
   const [countIn, setCountIn] = useState<number | null>(null);
   const [playhead, setPlayhead] = useState<number | null>(null);
   const [draggingSavedId, setDraggingSavedId] = useState<string | null>(null);
-  const [draggingLoopId, setDraggingLoopId] = useState<string | null>(null);
+  const [customSortDrag, setCustomSortDrag] = useState<CustomSortDrag | null>(null);
+  const [loopSortDrag, setLoopSortDrag] = useState<LoopSortDrag | null>(null);
   const [saveFeedback, setSaveFeedback] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -565,6 +553,10 @@ export default function App() {
   const activeLoopIndexRef = useRef<number | null>(null);
   const playbackSlotsRef = useRef(slots);
   const countInSlotsRef = useRef<StrumSlot[] | null>(null);
+  const customSortDragRef = useRef<CustomSortDrag | null>(null);
+  const customSortDropRectsRef = useRef<Map<string, DOMRect> | null>(null);
+  const loopSortDragRef = useRef<LoopSortDrag | null>(null);
+  const loopSortDropRectsRef = useRef<Map<string, DOMRect> | null>(null);
   const bpmRef = useRef(bpm);
   const latencyRef = useRef(latencyMs);
   const activeMeterRef = useRef(activeMeter);
@@ -1099,22 +1091,203 @@ export default function App() {
     });
   };
 
-  const beginLongPressDrag = (
-    id: string,
-    setDraggingId: (id: string | null) => void,
-  ) => {
-    clearLongPressTimer();
-    longPressTimerRef.current = window.setTimeout(() => {
-      stop();
-      setDraggingId(id);
-      longPressTimerRef.current = null;
-    }, 220);
+  const beginCustomSortDrag = (event: React.PointerEvent<HTMLElement>, id: string) => {
+    event.preventDefault();
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-sort-kind="saved"]'));
+    const sourceIndex = rows.findIndex((row) => row.dataset.sortId === id);
+    if (sourceIndex < 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const nextDrag = {
+      id,
+      pointerId: event.pointerId,
+      sourceIndex,
+      targetIndex: sourceIndex,
+      startPointerY: event.clientY,
+      pointerY: event.clientY,
+      centers: rows.map((row) => {
+        const rect = row.getBoundingClientRect();
+        return rect.top + rect.height / 2;
+      }),
+    };
+    customSortDragRef.current = nextDrag;
+    setDraggingSavedId(id);
+    setCustomSortDrag(nextDrag);
   };
 
-  const endDrag = (setDraggingId: (id: string | null) => void) => {
-    clearLongPressTimer();
-    setDraggingId(null);
+  const getCustomSortTransform = (index: number) => {
+    if (!customSortDrag) return undefined;
+    const { sourceIndex, targetIndex, startPointerY, pointerY, centers } = customSortDrag;
+    if (index === sourceIndex) {
+      return `translateY(${pointerY - startPointerY}px)`;
+    }
+    if (targetIndex > sourceIndex && index > sourceIndex && index <= targetIndex) {
+      return `translateY(${centers[index - 1] - centers[index]}px)`;
+    }
+    if (targetIndex < sourceIndex && index >= targetIndex && index < sourceIndex) {
+      return `translateY(${centers[index + 1] - centers[index]}px)`;
+    }
+    return undefined;
   };
+
+  const endCustomSortDrag = () => {
+    const current = customSortDragRef.current;
+    customSortDropRectsRef.current = new Map(
+      Array.from(document.querySelectorAll<HTMLElement>('[data-sort-kind="saved"]'))
+        .map((row) => [row.dataset.sortId!, row.getBoundingClientRect()]),
+    );
+    if (current && current.targetIndex !== current.sourceIndex) {
+      const targetId = savedPatterns[current.targetIndex]?.id;
+      if (targetId) reorderSavedPatterns(current.id, targetId);
+    }
+    customSortDragRef.current = null;
+    setDraggingSavedId(null);
+    setCustomSortDrag(null);
+  };
+
+  const beginLoopSortDrag = (event: React.PointerEvent<HTMLElement>, id: string) => {
+    event.preventDefault();
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-sort-kind="loop"]'));
+    const sourceIndex = rows.findIndex((row) => row.dataset.sortId === id);
+    if (sourceIndex < 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const nextDrag = {
+      id,
+      pointerId: event.pointerId,
+      sourceIndex,
+      targetIndex: sourceIndex,
+      startPointerY: event.clientY,
+      pointerY: event.clientY,
+      centers: rows.map((row) => {
+        const rect = row.getBoundingClientRect();
+        return rect.top + rect.height / 2;
+      }),
+    };
+    loopSortDragRef.current = nextDrag;
+    setLoopSortDrag(nextDrag);
+  };
+
+  const getLoopSortTransform = (index: number) => {
+    if (!loopSortDrag) return undefined;
+    const { sourceIndex, targetIndex, startPointerY, pointerY, centers } = loopSortDrag;
+    if (index === sourceIndex) return `translateY(${pointerY - startPointerY}px)`;
+    if (targetIndex > sourceIndex && index > sourceIndex && index <= targetIndex) {
+      return `translateY(${centers[index - 1] - centers[index]}px)`;
+    }
+    if (targetIndex < sourceIndex && index >= targetIndex && index < sourceIndex) {
+      return `translateY(${centers[index + 1] - centers[index]}px)`;
+    }
+    return undefined;
+  };
+
+  const endLoopSortDrag = () => {
+    const current = loopSortDragRef.current;
+    loopSortDropRectsRef.current = new Map(
+      Array.from(document.querySelectorAll<HTMLElement>('[data-sort-kind="loop"]'))
+        .map((row) => [row.dataset.sortId!, row.getBoundingClientRect()]),
+    );
+    if (current && current.targetIndex !== current.sourceIndex) {
+      const targetId = loopItems[current.targetIndex]?.id;
+      if (targetId) reorderLoopItems(current.id, targetId);
+    }
+    loopSortDragRef.current = null;
+    setLoopSortDrag(null);
+  };
+
+  // On release, animate from the exact visual positions into the committed order.
+  useLayoutEffect(() => {
+    const previous = customSortDropRectsRef.current;
+    if (!previous || customSortDrag) return;
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-sort-kind="saved"]'));
+    rows.forEach((row) => {
+      const before = previous.get(row.dataset.sortId!);
+      if (!before) return;
+      const after = row.getBoundingClientRect();
+      const deltaY = before.top - after.top;
+      if (Math.abs(deltaY) < 1) return;
+      row.style.transition = "none";
+      row.style.transform = `translateY(${deltaY}px)`;
+      // Force the visual release position before transitioning to the new slot.
+      void row.offsetHeight;
+      requestAnimationFrame(() => {
+        row.style.transition = "transform 240ms cubic-bezier(0.22, 1, 0.36, 1)";
+        row.style.removeProperty("transform");
+        window.setTimeout(() => row.style.removeProperty("transition"), 250);
+      });
+    });
+    customSortDropRectsRef.current = null;
+  }, [customSortDrag, savedPatterns]);
+
+  useEffect(() => {
+    if (!customSortDrag) return;
+    const onPointerMove = (event: PointerEvent) => {
+      const current = customSortDragRef.current;
+      if (!current || event.pointerId !== current.pointerId) return;
+      if (event.cancelable) event.preventDefault();
+      const crossedCount = current.centers.filter((center) => event.clientY >= center).length;
+      const targetIndex = Math.max(0, Math.min(current.centers.length - 1, crossedCount - 1));
+      const nextDrag = { ...current, pointerY: event.clientY, targetIndex };
+      customSortDragRef.current = nextDrag;
+      setCustomSortDrag(nextDrag);
+    };
+    const onPointerEnd = (event: PointerEvent) => {
+      if (customSortDragRef.current?.pointerId === event.pointerId) endCustomSortDrag();
+    };
+    window.addEventListener("pointermove", onPointerMove, { passive: false });
+    window.addEventListener("pointerup", onPointerEnd);
+    window.addEventListener("pointercancel", onPointerEnd);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerEnd);
+      window.removeEventListener("pointercancel", onPointerEnd);
+    };
+  }, [customSortDrag]);
+
+  useEffect(() => {
+    if (!loopSortDrag) return;
+    const onPointerMove = (event: PointerEvent) => {
+      const current = loopSortDragRef.current;
+      if (!current || event.pointerId !== current.pointerId) return;
+      if (event.cancelable) event.preventDefault();
+      const crossedCount = current.centers.filter((center) => event.clientY >= center).length;
+      const targetIndex = Math.max(0, Math.min(current.centers.length - 1, crossedCount - 1));
+      const nextDrag = { ...current, pointerY: event.clientY, targetIndex };
+      loopSortDragRef.current = nextDrag;
+      setLoopSortDrag(nextDrag);
+    };
+    const onPointerEnd = (event: PointerEvent) => {
+      if (loopSortDragRef.current?.pointerId === event.pointerId) endLoopSortDrag();
+    };
+    window.addEventListener("pointermove", onPointerMove, { passive: false });
+    window.addEventListener("pointerup", onPointerEnd);
+    window.addEventListener("pointercancel", onPointerEnd);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerEnd);
+      window.removeEventListener("pointercancel", onPointerEnd);
+    };
+  }, [loopSortDrag]);
+
+  useLayoutEffect(() => {
+    const previous = loopSortDropRectsRef.current;
+    if (!previous || loopSortDrag) return;
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-sort-kind="loop"]'));
+    rows.forEach((row) => {
+      const before = previous.get(row.dataset.sortId!);
+      if (!before) return;
+      const after = row.getBoundingClientRect();
+      const deltaY = before.top - after.top;
+      if (Math.abs(deltaY) < 1) return;
+      row.style.transition = "none";
+      row.style.transform = `translateY(${deltaY}px)`;
+      void row.offsetHeight;
+      requestAnimationFrame(() => {
+        row.style.transition = "transform 240ms cubic-bezier(0.22, 1, 0.36, 1)";
+        row.style.removeProperty("transform");
+        window.setTimeout(() => row.style.removeProperty("transition"), 250);
+      });
+    });
+    loopSortDropRectsRef.current = null;
+  }, [loopItems, loopSortDrag]);
 
   const beginCustomEditorPress = () => {
     clearLongPressTimer();
@@ -1160,7 +1333,9 @@ export default function App() {
   };
 
   const applyBackupPayload = (parsed: Partial<StoredState> & { workspaces?: StoredState["workspaces"] }) => {
-    if (!parsed.workspaces) return false;
+    if (!parsed.workspaces) {
+      return false;
+    }
     const nextMeter = METERS.includes(parsed.activeMeter as MeterId)
       ? (parsed.activeMeter as MeterId)
       : activeMeter;
@@ -1188,7 +1363,7 @@ export default function App() {
     return true;
   };
 
-  const exportPattern = async () => {
+  const exportPattern = () => {
     const payload = createBackupPayload();
     const now = new Date();
     const timestamp = [
@@ -1199,18 +1374,14 @@ export default function App() {
       String(now.getMinutes()).padStart(2, "0"),
       String(now.getSeconds()).padStart(2, "0"),
     ].join("");
-    const filename = `strum-backup-${timestamp}.json`;
-    const data = JSON.stringify(payload, null, 2);
-
-    const blob = new Blob([data], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = filename;
+    anchor.download = `strum-backup-${timestamp}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
   };
-
   const importPattern = async (file: File) => {
     try {
       const parsed = JSON.parse(await file.text()) as Partial<StoredState> & {
@@ -1254,12 +1425,13 @@ export default function App() {
       });
       const result = await response.json() as { token?: string };
       if (!response.ok || !result.token) throw new Error(shareRequestError(response.status, "生成分享口令失败。"));
-      const message = `这是来自「Guitar Mate」的扫弦配置分享，30分钟内有效。分享口令为「${result.token}」`;
+      const message = `这是来自「Guitar Mate」的扫弦配置分享，30分钟内有效。复制这条消息后，打开左上角设置 -> 导入配置 -> 从分享口令导入。分享口令为「${result.token}」`;
       setShareCode(result.token);
-      const copied = await copyToClipboard(message);
-      if (copied) {
+      try {
+        if (!navigator.clipboard) throw new Error("Clipboard unavailable");
+        await navigator.clipboard.writeText(message);
         setShareStatus("分享口令已复制，有效期 30 分钟。");
-      } else {
+      } catch {
         setShareCopyFallback(message);
         setShareStatus("分享口令已生成，请长按上方文字复制。");
       }
@@ -1440,8 +1612,8 @@ export default function App() {
         <button
           className="settings-toggle"
           type="button"
-          title="显示设置"
-          aria-label="显示设置"
+          title="设置"
+          aria-label="设置"
           onClick={() => setSettingsOpen(true)}
         >
           <Settings size={21} />
@@ -1482,12 +1654,12 @@ export default function App() {
         <div className="overlay" role="presentation" onClick={() => setSettingsOpen(false)}>
           <section
             className="floating-panel settings-panel"
-            aria-label="显示设置"
+            aria-label="设置"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="floating-header">
               <div>
-                <strong>显示设置</strong>
+                <strong>设置</strong>
                 <span>调整练习时的阅读体验</span>
               </div>
             </div>
@@ -1851,7 +2023,7 @@ export default function App() {
             <div className="floating-header">
               <div>
                 <strong>编辑自定义</strong>
-                <span>{savedPatterns.length > 0 ? "长按条目可拖动排序" : "暂无自定义节奏型"}</span>
+                <span>{savedPatterns.length > 0 ? "拖动左侧按钮排序" : "暂无自定义节奏型"}</span>
               </div>
             </div>
             {savedPatterns.length > 0 ? (
@@ -1860,33 +2032,24 @@ export default function App() {
                   <div
                     className={[
                       "saved-item",
-                      draggingSavedId === pattern.id ? "dragging" : "",
+                      customSortDrag?.id === pattern.id ? "custom-sorting" : "",
                     ].join(" ")}
-                    draggable={draggingSavedId === pattern.id}
                     key={pattern.id}
-                    onDragStart={(event) => {
-                      event.dataTransfer.effectAllowed = "move";
-                      event.dataTransfer.setData("text/plain", pattern.id);
-                    }}
-                    onDragOver={(event) => {
-                      if (draggingSavedId) {
-                        event.preventDefault();
-                        reorderSavedPatterns(draggingSavedId, pattern.id);
-                      }
-                    }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      endDrag(setDraggingSavedId);
-                    }}
-                    onDragEnd={() => endDrag(setDraggingSavedId)}
-                    onPointerDown={() => beginLongPressDrag(pattern.id, setDraggingSavedId)}
-                    onPointerLeave={clearLongPressTimer}
-                    onPointerUp={() => {
-                      if (!draggingSavedId) {
-                        clearLongPressTimer();
-                      }
-                    }}
+                    data-sort-id={pattern.id}
+                    data-sort-kind="saved"
+                    style={{ transform: getCustomSortTransform(savedPatterns.findIndex((item) => item.id === pattern.id)) }}
                   >
+                    <button
+                      type="button"
+                      className="drag-handle"
+                      aria-label={`拖动${pattern.name}排序`}
+                      onContextMenu={(event) => event.preventDefault()}
+                      onPointerDown={(event) => {
+                        beginCustomSortDrag(event, pattern.id);
+                      }}
+                    >
+                      <List size={18} />
+                    </button>
                     <button
                       className={selectedId === pattern.id ? "selected saved-load" : "saved-load"}
                       type="button"
@@ -2028,7 +2191,7 @@ export default function App() {
             <div className="floating-header">
               <div>
                 <strong>编辑循环</strong>
-                <span>{loopItems.length > 0 ? "长按条目可拖动排序" : "从下方添加节奏型"}</span>
+                <span>{loopItems.length > 0 ? "拖动左侧按钮排序" : "从下方添加节奏型"}</span>
               </div>
               <button
                 className="icon-button"
@@ -2062,48 +2225,41 @@ export default function App() {
                     return source ? (
                   <div
                     className={[
-                      "loop-item",
-                      activeLoopIndex === index ? "active" : "",
-                      draggingLoopId === item.id ? "dragging" : "",
+                      "loop-editor-row",
+                      loopSortDrag?.id === item.id ? "loop-sorting" : "",
                     ].join(" ")}
-                    draggable={draggingLoopId === item.id}
                     key={item.id}
-                    onDragStart={(event) => {
-                      event.dataTransfer.effectAllowed = "move";
-                      event.dataTransfer.setData("text/plain", item.id);
-                    }}
-                    onDragOver={(event) => {
-                      if (draggingLoopId) {
-                        event.preventDefault();
-                        reorderLoopItems(draggingLoopId, item.id);
-                      }
-                    }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      endDrag(setDraggingLoopId);
-                    }}
-                    onDragEnd={() => endDrag(setDraggingLoopId)}
-                    onPointerDown={() => beginLongPressDrag(item.id, setDraggingLoopId)}
-                    onPointerLeave={clearLongPressTimer}
-                    onPointerUp={() => {
-                      if (!draggingLoopId) {
-                        clearLongPressTimer();
-                      }
-                    }}
+                    data-sort-id={item.id}
+                    data-sort-kind="loop"
+                    style={{ transform: getLoopSortTransform(loopItems.findIndex((loopItem) => loopItem.id === item.id)) }}
                   >
-                    <span>{index + 1}</span>
-                    <strong>{source.name}</strong>
                     <button
                       type="button"
-                      title="删除循环项"
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        removeLoopItem(item.id);
-                      }}
+                      className="drag-handle"
+                      aria-label={`拖动${source.name}排序`}
+                      onContextMenu={(event) => event.preventDefault()}
+                      onPointerDown={(event) => beginLoopSortDrag(event, item.id)}
                     >
-                      <Trash2 size={15} />
+                      <List size={18} />
                     </button>
+                    <div className={[
+                      "loop-item",
+                      activeLoopIndex === index ? "active" : "",
+                    ].join(" ")}>
+                      <span>{index + 1}</span>
+                      <strong>{source.name}</strong>
+                      <button
+                        type="button"
+                        title="删除循环项"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          removeLoopItem(item.id);
+                        }}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   </div>
                     ) : null;
                   })()

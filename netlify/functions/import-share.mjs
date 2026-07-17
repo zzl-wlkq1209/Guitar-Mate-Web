@@ -13,10 +13,8 @@ export default async (request) => {
     const rows = await response.json();
     const record = Array.isArray(rows) ? rows[0] : null;
     if (!response.ok || !record || new Date(record.expires_at).getTime() <= Date.now()) {
-      await supabase(`share_tokens?token=eq.${token}`, { method: "DELETE" });
       return json(404, { error: "分享口令不存在或已过期。" });
     }
-    await supabase(`share_tokens?token=eq.${token}`, { method: "DELETE" });
     return json(200, { payload: record.payload });
   } catch {
     return json(400, { error: "无法读取分享口令。" });
