@@ -576,6 +576,7 @@ export default function App() {
   const activeLoopIndexRef = useRef<number | null>(null);
   const playbackSlotsRef = useRef(slots);
   const countInSlotsRef = useRef<StrumSlot[] | null>(null);
+  const shareCopyFallbackRef = useRef<HTMLTextAreaElement | null>(null);
   const customSortDragRef = useRef<CustomSortDrag | null>(null);
   const loopSortDragRef = useRef<LoopSortDrag | null>(null);
   const bpmRef = useRef(bpm);
@@ -716,6 +717,13 @@ export default function App() {
     latencyRef.current = latencyMs;
     setLatencyInput(String(latencyMs));
   }, [latencyMs]);
+
+  useEffect(() => {
+    const field = shareCopyFallbackRef.current;
+    if (!field) return;
+    field.style.height = "auto";
+    field.style.height = `${field.scrollHeight}px`;
+  }, [shareCopyFallback]);
 
   useEffect(() => {
     // Apply the display preference at the document root so rem-based controls scale together.
@@ -1486,8 +1494,19 @@ export default function App() {
       const message = `这是来自「Guitar Mate」的扫弦配置分享，30分钟内有效。复制这条消息后，打开左上角设置 -> 导入配置 -> 从分享口令导入。分享口令为「${result.token}」`;
       setShareCode(result.token);
       try {
-        if (!navigator.clipboard) throw new Error("Clipboard unavailable");
-        await navigator.clipboard.writeText(message);
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(message);
+        } else {
+          const field = document.createElement("textarea");
+          field.value = message;
+          field.style.position = "fixed";
+          field.style.opacity = "0";
+          document.body.appendChild(field);
+          field.select();
+          const copied = document.execCommand("copy");
+          field.remove();
+          if (!copied) throw new Error("Clipboard unavailable");
+        }
         setShareStatus("分享口令已复制，有效期 30 分钟。");
       } catch {
         setShareCopyFallback(message);
@@ -1852,6 +1871,7 @@ export default function App() {
                 {shareCopyFallback ? (
                   <textarea
                     className="share-code-display"
+                    ref={shareCopyFallbackRef}
                     readOnly
                     value={shareCopyFallback}
                     aria-label="完整分享文本，可长按复制"

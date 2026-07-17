@@ -792,6 +792,7 @@ button:disabled {
 .share-code-display {
   width: 100%;
   min-height: 0;
+  box-sizing: border-box;
   padding: 10px 11px;
   border: 1px solid var(--orange);
   border-radius: var(--radius);
@@ -801,7 +802,7 @@ button:disabled {
   font-size: 0.82rem;
   letter-spacing: 0;
   line-height: 1.5;
-  field-sizing: content;
+  overflow: hidden;
   resize: none;
   user-select: text;
 }
@@ -1328,7 +1329,6 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: #fbfcfd;
-  touch-action: none;
   transition:
     transform 150ms ease,
     opacity 150ms ease,
