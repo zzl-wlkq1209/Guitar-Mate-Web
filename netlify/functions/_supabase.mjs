@@ -7,6 +7,7 @@ export function json(statusCode, body) {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
+      // The local Vite preview and Capacitor WebView use different origins.
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
@@ -15,9 +16,15 @@ export function json(statusCode, body) {
 }
 
 export function requirePost(request) {
-  if (request.method === "OPTIONS") return json(204, {});
-  if (request.method !== "POST") return json(405, { error: "仅支持 POST 请求。" });
-  if (!supabaseUrl || !serviceRoleKey) return json(500, { error: "分享服务尚未配置。" });
+  if (request.method === "OPTIONS") {
+    return json(204, {});
+  }
+  if (request.method !== "POST") {
+    return json(405, { error: "仅支持 POST 请求。" });
+  }
+  if (!supabaseUrl || !serviceRoleKey) {
+    return json(500, { error: "分享服务尚未配置。" });
+  }
   return null;
 }
 

@@ -1,0 +1,3769 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#171814">
+  <title>吉他谱试听器</title>
+  <style>
+    :root {
+      --bg: #171814;
+      --panel: #22231e;
+      --panel-2: #2b2c25;
+      --line: #3c3e34;
+      --text: #f3f0e5;
+      --muted: #aaa99d;
+      --lime: #d4ef67;
+      --lime-dark: #9fb73e;
+      --orange: #ef9c55;
+      --red: #ef6f63;
+      --shadow: 0 20px 55px rgba(0,0,0,.28);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+    html { color-scheme: dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow-x: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body { user-select: none; -webkit-user-select: none; }
+    button, input, textarea, select { font: inherit; }
+    input, textarea { user-select: text; -webkit-user-select: text; }
+    button { color: inherit; }
+
+    .shell {
+      width: min(1220px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 52px;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 22px;
+    }
+
+    .brand-kicker {
+      color: var(--lime);
+      font: 700 12px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(29px, 4vw, 48px);
+      line-height: 1.05;
+      letter-spacing: -.045em;
+    }
+
+    .lede {
+      margin: 10px 0 0;
+      max-width: 650px;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 9px 12px;
+      color: var(--muted);
+      font-size: 12px;
+      background: rgba(255,255,255,.025);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--lime);
+      box-shadow: 0 0 0 4px rgba(212,239,103,.12);
+    }
+
+    .transport {
+      display: grid;
+      grid-template-columns: auto minmax(180px, 1fr) auto auto auto;
+      align-items: center;
+      gap: 14px;
+      padding: 16px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      position: sticky;
+      top: 12px;
+      z-index: 10;
+      min-width: 0;
+    }
+    .transport > * { min-width: 0; }
+
+    .transport-buttons { display: flex; gap: 9px; }
+
+    .icon-button, .primary-button, .ghost-button {
+      border: 0;
+      cursor: pointer;
+      transition: transform .15s ease, background .15s ease, border-color .15s ease;
+    }
+
+    .icon-button:active, .primary-button:active, .ghost-button:active { transform: translateY(1px); }
+
+    .icon-button {
+      width: 44px;
+      height: 44px;
+      border-radius: 13px;
+      display: grid;
+      place-items: center;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+    }
+
+    .icon-button:hover { border-color: #666955; }
+    .icon-button.play { background: var(--lime); color: #181912; border-color: var(--lime); }
+
+    .progress-wrap { min-width: 0; }
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .progress-track {
+      height: 8px;
+      border-radius: 999px;
+      background: #12130f;
+      overflow: hidden;
+      cursor: pointer;
+      border: 1px solid #303129;
+    }
+
+    .progress-fill {
+      width: 0;
+      height: 100%;
+      background: var(--lime);
+      border-radius: inherit;
+    }
+
+    .bpm-control {
+      display: grid;
+      grid-template-columns: auto 100px 58px;
+      align-items: center;
+      gap: 9px;
+      min-width: 230px;
+    }
+
+    .bpm-label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: .08em;
+    }
+
+    input[type="range"] { accent-color: var(--lime); width: 100%; }
+
+    .bpm-number, .beats-select {
+      width: 100%;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #181914;
+      color: var(--text);
+      text-align: center;
+      outline: none;
+    }
+
+    .beat-control, .tone-control, .layout-control, .capo-control { display: flex; align-items: center; gap: 8px; }
+    .beats-select { width: 68px; }
+    .tone-select, .capo-select {
+      height: 38px;
+      min-width: 112px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #181914;
+      color: var(--text);
+      padding: 0 9px;
+      outline: none;
+    }
+    .capo-select { min-width: 76px; }
+    .layout-select {
+      height: 38px;
+      min-width: 104px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #181914;
+      color: var(--text);
+      padding: 0 9px;
+      outline: none;
+    }
+
+    .score-panel { margin-top: 18px; }
+    .score-scroll {
+      overflow-x: auto;
+      background: #10110e;
+      padding: 8px 10px 13px;
+      scrollbar-color: #474a3b #191a15;
+    }
+    #scoreSvg {
+      display: block;
+      width: 100%;
+      min-width: 0;
+      height: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .score-line { stroke: #74776d; stroke-width: 1; }
+    .score-bar { stroke: #aeb0a5; stroke-width: 1.2; }
+    .score-beam { stroke: #c3c5ba; stroke-width: 1.3; fill: none; }
+    .score-triplet-line { stroke: #c3c5ba; stroke-width: 1; fill: none; }
+    .score-triplet-bg { fill: #10110e; }
+    .score-triplet-text { fill: #f6f2e7; font-size: 10px; font-weight: 800; text-anchor: middle; dominant-baseline: central; }
+    .score-chord-connector { stroke: #c3c5ba; stroke-width: 1.2; fill: none; }
+    .score-flag { stroke: #c3c5ba; stroke-width: 1.35; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .score-note-bg { fill: #10110e; }
+    .score-note-text { fill: #f6f2e7; font-size: 11px; font-weight: 750; text-anchor: middle; dominant-baseline: central; }
+    .score-x { fill: #a8aa9f; font-size: 13px; text-anchor: middle; dominant-baseline: central; }
+    .score-special { fill: #f6f2e7; font-size: 11px; font-weight: 750; text-anchor: middle; dominant-baseline: central; }
+    .score-harmonic { fill: #10110e; stroke: #e2e2d8; stroke-width: 1; }
+    .score-chord-name { fill: #d4ef67; font-size: 12px; font-weight: 750; text-anchor: middle; }
+    .score-system-number { fill: #e5b354; font-size: 10px; font-weight: 800; }
+    .score-legato { stroke: #e2e2d8; stroke-width: 1.1; fill: none; }
+    .score-slide { stroke: #e2e2d8; stroke-width: 1.15; fill: none; }
+    .score-arpeggio { stroke: #e2e2d8; stroke-width: 1.1; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .score-dot { fill: #f6f2e7; }
+    .score-whole-note { stroke: #d9dbd0; stroke-width: 3; stroke-linecap: round; }
+    .timing-issue-bg { fill: #351817; stroke: #ef6f63; stroke-width: .8; }
+    .timing-issue-text { fill: #ff9b92; font-size: 9px; font-weight: 800; text-anchor: middle; dominant-baseline: central; }
+    .score-rest { fill: #d9dbd0; font-family: "Segoe UI Symbol", "Noto Music", serif; font-size: 22px; text-anchor: middle; dominant-baseline: central; }
+    .diagram-grid { stroke: #8c8f84; stroke-width: .8; }
+    .diagram-dot { fill: #f3f0e5; }
+    .diagram-mark { fill: #d5d6cf; font-size: 8px; text-anchor: middle; }
+    .playhead { stroke: #e5b354; stroke-width: 2; opacity: .9; pointer-events: none; }
+    #scoreSvg { cursor: crosshair; }
+    .count-in-control { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+    .count-in-control input { accent-color: var(--lime); width: 17px; height: 17px; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(280px, .7fr);
+      gap: 18px;
+      margin-top: 18px;
+    }
+    .workspace > *, .side-stack, .card { min-width: 0; }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .card-head {
+      min-height: 58px;
+      padding: 14px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .card-title {
+      margin: 0;
+      font-size: 14px;
+      letter-spacing: -.01em;
+    }
+
+    .card-subtitle { color: var(--muted); font-size: 11px; margin-top: 3px; }
+    .head-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+
+    .library-bar {
+      margin-top: 18px;
+      padding: 13px 15px;
+      display: grid;
+      grid-template-columns: auto minmax(180px, 1fr) minmax(160px, .75fr) auto;
+      align-items: center;
+      gap: 10px;
+    }
+    .library-title { color: var(--lime); font-size: 12px; font-weight: 800; white-space: nowrap; }
+    .library-select, .library-name {
+      width: 100%; height: 38px; border: 1px solid var(--line); border-radius: 10px;
+      background: #181914; color: var(--text); padding: 0 10px; outline: none;
+    }
+    .library-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+    .library-actions button { min-height: 34px; padding: 0 11px; }
+
+    .ghost-button, .primary-button {
+      min-height: 36px;
+      border-radius: 10px;
+      padding: 0 13px;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .ghost-button { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+    .ghost-button:hover { color: var(--text); border-color: #656852; }
+    .primary-button { background: var(--lime); color: #181912; }
+
+    textarea {
+      display: block;
+      width: 100%;
+      resize: vertical;
+      border: 0;
+      outline: none;
+      background: #181914;
+      color: #eeeade;
+      caret-color: var(--lime);
+      tab-size: 2;
+    }
+
+    .tab-editor-wrap { position: relative; }
+    .column-selection-overlay {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .column-selection-cell {
+      position: absolute;
+      background: rgba(212,239,103,.24);
+      border: 1px solid rgba(212,239,103,.58);
+    }
+
+    #tabInput {
+      min-height: 330px;
+      padding: 18px;
+      font: 500 13px/1.75 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      white-space: pre;
+      overflow: auto;
+    }
+
+    #shapeInput {
+      min-height: 164px;
+      padding: 15px 16px;
+      font: 600 13px/1.8 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .side-stack { display: grid; gap: 18px; align-content: start; }
+
+    .shape-help {
+      padding: 12px 16px 15px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.55;
+      border-top: 1px solid var(--line);
+    }
+
+    .summary { padding: 15px 16px 17px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+    .metric {
+      background: #191a15;
+      border: 1px solid #34362d;
+      border-radius: 12px;
+      padding: 11px 10px;
+    }
+
+    .metric strong { display: block; font-size: 20px; letter-spacing: -.04em; }
+    .metric span { color: var(--muted); font-size: 10px; }
+
+    .chord-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 13px;
+    }
+
+    .chord-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border-radius: 9px;
+      padding: 7px 9px;
+      background: #303126;
+      border: 1px solid #424435;
+      font: 700 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .chord-chip code { color: var(--lime); }
+
+    .message {
+      margin-top: 13px;
+      border-radius: 12px;
+      padding: 11px 12px;
+      font-size: 12px;
+      line-height: 1.55;
+      background: rgba(212,239,103,.07);
+      border: 1px solid rgba(212,239,103,.2);
+      color: #dce9aa;
+    }
+
+    .message.error {
+      background: rgba(239,111,99,.08);
+      border-color: rgba(239,111,99,.27);
+      color: #f5b0aa;
+    }
+
+    .now-playing {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: center;
+      padding: 17px 18px;
+      background: #10110e;
+      border: 1px solid #303229;
+      border-radius: 14px;
+    }
+
+    .now-label { color: var(--muted); font-size: 10px; letter-spacing: .12em; font-weight: 800; }
+    .now-notes { margin-top: 5px; font: 750 21px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .now-chord { color: var(--lime); }
+
+    .pulse-bars { display: flex; gap: 4px; height: 30px; align-items: flex-end; }
+    .pulse-bars i { width: 4px; height: 8px; border-radius: 4px; background: var(--lime); opacity: .38; }
+    body.playing .pulse-bars i { animation: pulse .72s ease-in-out infinite alternate; }
+    body.playing .pulse-bars i:nth-child(2) { animation-delay: -.2s; }
+    body.playing .pulse-bars i:nth-child(3) { animation-delay: -.4s; }
+    body.playing .pulse-bars i:nth-child(4) { animation-delay: -.1s; }
+    body.playing .pulse-bars i:nth-child(5) { animation-delay: -.32s; }
+
+    @keyframes pulse { to { height: 29px; opacity: 1; } }
+
+    .footer-note {
+      color: #7e7e73;
+      font-size: 11px;
+      line-height: 1.6;
+      margin-top: 14px;
+    }
+
+    @media (max-width: 860px) {
+      header { align-items: flex-start; flex-direction: column; }
+      .transport { grid-template-columns: auto 1fr; }
+      .bpm-control { grid-column: 1 / -1; min-width: 0; }
+      .beat-control, .tone-control, .layout-control, .capo-control { justify-self: end; }
+      .workspace { grid-template-columns: 1fr; }
+      .side-stack { grid-template-columns: 1fr 1fr; }
+      .library-bar { grid-template-columns: auto 1fr; }
+      .library-actions { grid-column: 1 / -1; }
+    }
+
+    @media (max-width: 640px) {
+      .shell { width: min(100% - 18px, 1220px); padding-top: 18px; }
+      .transport { position: static; }
+      .transport, .side-stack { grid-template-columns: 1fr; }
+      .transport-buttons { justify-content: center; }
+      .beat-control, .tone-control, .layout-control, .capo-control { justify-self: stretch; justify-content: space-between; }
+      .beat-control, .tone-control, .layout-control, .capo-control { width: 100%; min-width: 0; }
+      .beats-select, .tone-select, .layout-select, .capo-select { width: min(160px, 52vw); min-width: 0; }
+      .bpm-control { grid-template-columns: auto 1fr 58px; }
+      .card-head { align-items: flex-start; flex-direction: column; }
+      .head-actions { width: 100%; }
+      .head-actions button { flex: 1; }
+      .library-bar { grid-template-columns: 1fr; }
+      .library-actions { grid-column: auto; }
+      .library-actions button { flex: 1; }
+    }
+
+    @media (min-width: 1200px) {
+      .shell {
+        width: min(1680px, calc(100% - 40px));
+        display: grid;
+        grid-template-columns: minmax(0, 1.12fr) minmax(520px, .88fr);
+        gap: 18px;
+      }
+      .shell > header, .shell > .transport, .shell > .library-bar { grid-column: 1 / -1; }
+      .shell > header { margin-bottom: 4px; }
+      .transport, .library-bar, .score-panel { margin-top: 0; }
+      .score-panel { grid-column: 1; }
+      .workspace { display: contents; }
+      .workspace > .card { grid-column: 2; }
+      .side-stack {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
+      }
+      #tabInput { min-height: 610px; }
+    }
+
+    /* Guitar Mate host integration: the React app owns the product header and theme. */
+    html,
+    body {
+      min-height: 0;
+      background: transparent;
+    }
+
+    .shell {
+      width: 100%;
+      padding: 14px 0 44px;
+    }
+
+    .shell > header {
+      display: none;
+    }
+
+    .transport {
+      top: 0;
+      border-radius: 12px;
+      box-shadow: none;
+    }
+
+    .card {
+      border-radius: 12px;
+    }
+
+    html[data-host-theme="dark"] {
+      color-scheme: dark;
+      --bg: #18181a;
+      --panel: #242326;
+      --panel-2: #29282c;
+      --line: #303034;
+      --text: #fbfaf6;
+      --muted: #b9b6b0;
+      --lime: #61a982;
+      --lime-dark: #4a8d6c;
+      --orange: #e5b354;
+      --shadow: none;
+      --radius: 12px;
+    }
+
+    html[data-host-theme="light"] {
+      color-scheme: light;
+      --bg: transparent;
+      --panel: rgba(255, 255, 255, .9);
+      --panel-2: #f8f6f0;
+      --line: #e4e0d8;
+      --text: #343333;
+      --muted: #8b8781;
+      --lime: #61a982;
+      --lime-dark: #4a8d6c;
+      --orange: #d8a64e;
+      --red: #c75c54;
+      --shadow: 0 14px 34px rgba(65, 59, 50, .08);
+      --radius: 12px;
+    }
+
+    html[data-host-theme="light"] .transport,
+    html[data-host-theme="light"] .card {
+      box-shadow: var(--shadow);
+    }
+
+    html[data-host-theme="light"] .progress-track,
+    html[data-host-theme="light"] .bpm-number,
+    html[data-host-theme="light"] .beats-select,
+    html[data-host-theme="light"] .tone-select,
+    html[data-host-theme="light"] .capo-select,
+    html[data-host-theme="light"] .layout-select,
+    html[data-host-theme="light"] .library-select,
+    html[data-host-theme="light"] .library-name,
+    html[data-host-theme="light"] textarea,
+    html[data-host-theme="light"] .metric,
+    html[data-host-theme="light"] .now-playing {
+      background: #fbfaf6;
+      color: var(--text);
+    }
+
+    html[data-host-theme="light"] .score-scroll {
+      background: #fffefa;
+      scrollbar-color: #d8d1c5 #f6f3ec;
+    }
+
+    html[data-host-theme="light"] .score-triplet-bg,
+    html[data-host-theme="light"] .score-note-bg,
+    html[data-host-theme="light"] .score-harmonic {
+      fill: #fffefa;
+    }
+
+    html[data-host-theme="light"] .score-note-text,
+    html[data-host-theme="light"] .score-special,
+    html[data-host-theme="light"] .score-triplet-text,
+    html[data-host-theme="light"] .diagram-dot,
+    html[data-host-theme="light"] .score-dot {
+      fill: #343333;
+    }
+
+    html[data-host-theme="light"] .score-line,
+    html[data-host-theme="light"] .diagram-grid {
+      stroke: #8b8781;
+    }
+
+    html[data-host-theme="light"] .score-bar,
+    html[data-host-theme="light"] .score-beam,
+    html[data-host-theme="light"] .score-triplet-line,
+    html[data-host-theme="light"] .score-chord-connector,
+    html[data-host-theme="light"] .score-flag,
+    html[data-host-theme="light"] .score-legato,
+    html[data-host-theme="light"] .score-slide,
+    html[data-host-theme="light"] .score-arpeggio,
+    html[data-host-theme="light"] .score-whole-note {
+      stroke: #625f5a;
+    }
+
+    html[data-host-theme="light"] .score-x,
+    html[data-host-theme="light"] .diagram-mark,
+    html[data-host-theme="light"] .score-rest {
+      fill: #625f5a;
+    }
+
+    html[data-host-theme="light"] .column-selection-cell {
+      background: rgba(74, 141, 108, .18);
+      border-color: rgba(74, 141, 108, .48);
+    }
+
+    html[data-host-theme="light"] .message {
+      background: rgba(97, 169, 130, .09);
+      border-color: rgba(74, 141, 108, .25);
+      color: #3c775a;
+    }
+
+    @media (max-width: 640px) {
+      .shell {
+        width: 100%;
+        padding-top: 10px;
+      }
+    }
+
+    /* Compact score-first player shell. */
+    .transport {
+      display: none;
+    }
+
+    .shell {
+      padding-top: 0;
+    }
+
+    .tab-command-bar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      min-height: 72px;
+      padding: 8px;
+      border: 0;
+      border-radius: 0;
+      background: color-mix(in srgb, var(--bg) 92%, transparent);
+      box-shadow: none;
+      backdrop-filter: blur(16px);
+    }
+
+    .tab-command-bar button {
+      display: grid;
+      min-width: 0;
+      align-content: center;
+      gap: 4px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      color: var(--text);
+      text-align: left;
+    }
+
+    .tab-command-bar button:last-child { border-right: 1px solid var(--line); }
+    .tab-command-bar button:hover { background: color-mix(in srgb, var(--lime) 8%, transparent); }
+    .tab-command-bar strong { display: flex; align-items: center; gap: 5px; overflow: hidden; font-size: 17px; line-height: 1.1; white-space: nowrap; text-overflow: ellipsis; }
+    .tab-command-bar strong i { color: var(--muted); font-size: 24px; font-style: normal; line-height: .7; }
+    .tab-command-bar button > span { color: var(--muted); font-size: 11px; font-weight: 750; white-space: nowrap; }
+
+    .score-actions-bar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+    }
+
+    .current-score-button {
+      display: grid;
+      min-width: 0;
+      gap: 2px;
+      padding: 3px 7px;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+    }
+
+    .current-score-button span { color: var(--muted); font-size: 10px; font-weight: 750; }
+    .current-score-button strong { overflow: hidden; font-size: 13px; white-space: nowrap; text-overflow: ellipsis; }
+    .score-actions-bar > .ghost-button { min-height: 38px; color: var(--lime); }
+
+    .score-panel { margin-top: 10px; }
+    .score-panel > .card-head { min-height: 45px; padding: 9px 13px; }
+    .score-panel .card-title { font-size: 13px; }
+    .score-panel .card-subtitle { margin-top: 1px; font-size: 10px; }
+    .score-scroll { padding: 0 5px 5px; }
+
+    .editor-toggle {
+      display: block;
+      width: 100%;
+      height: 42px;
+      min-height: 42px;
+      align-self: start;
+      margin-top: 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .workspace { margin-top: 10px; }
+    .workspace[hidden] { display: none !important; }
+
+    .content-layout {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .right-pane { display: contents; }
+    .content-layout > .tab-command-bar { order: 1; }
+    .right-pane > .score-actions-bar { order: 2; }
+    .content-layout > .score-panel { order: 3; }
+    .right-pane > .editor-toggle { order: 4; }
+    .right-pane > .workspace { order: 5; }
+
+    @media (min-width: 1200px) {
+      .shell {
+        display: block;
+        width: 100%;
+      }
+
+      .content-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.12fr) minmax(520px, .88fr);
+        grid-template-rows: auto minmax(0, 1fr);
+        gap: 18px;
+        align-items: start;
+      }
+
+      .content-layout > .tab-command-bar {
+        grid-column: 1;
+        grid-row: 1;
+      }
+
+      .content-layout > .score-panel {
+        grid-column: 1;
+        grid-row: 2;
+        margin-top: 0;
+      }
+
+      .content-layout > .right-pane {
+        grid-column: 2;
+        grid-row: 1 / 3;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        min-width: 0;
+      }
+
+      .right-pane > .score-actions-bar,
+      .right-pane > .editor-toggle,
+      .right-pane > .workspace {
+        margin-top: 0;
+      }
+
+      .right-pane > .editor-toggle {
+        grid-column: 2;
+        grid-row: 2;
+        flex: 0 0 42px;
+      }
+
+      .right-pane > .workspace {
+        display: grid;
+      }
+    }
+
+    .player-dialog {
+      width: min(560px, calc(100% - 24px));
+      max-height: calc(100dvh - 28px);
+      padding: 0;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--bg);
+      color: var(--text);
+      box-shadow: 0 28px 80px rgba(0, 0, 0, .48);
+    }
+
+    .player-dialog::backdrop { background: rgba(8, 9, 8, .66); backdrop-filter: blur(5px); }
+    .player-dialog form { display: grid; gap: 16px; padding: 18px; }
+
+    .dialog-heading,
+    .dialog-section-title,
+    .dialog-actions,
+    .library-dialog-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .dialog-heading > strong { font-size: 18px; }
+    .dialog-heading > button { width: 34px; height: 34px; border-radius: 50%; background: var(--panel); color: var(--muted); font-size: 22px; }
+    .dialog-section { display: grid; gap: 10px; }
+    .dialog-section-title strong, .compact-section > strong { font-size: 14px; }
+    .reset-text { background: transparent; color: var(--muted); font-size: 12px; }
+    .dialog-help { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--panel); color: var(--muted); font-size: 11px; line-height: 1.5; }
+
+    .choice-grid { display: grid; gap: 8px; }
+    .key-choice-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .capo-choice-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+    .choice-grid button,
+    .inline-choice button,
+    .layout-choice-list button {
+      min-height: 48px;
+      padding: 0 8px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: var(--panel);
+      color: var(--text);
+      font-weight: 750;
+    }
+
+    .choice-grid button.selected,
+    .inline-choice button.selected,
+    .layout-choice-list button.selected {
+      border-color: var(--lime);
+      background: color-mix(in srgb, var(--lime) 16%, var(--panel));
+      color: var(--lime);
+    }
+
+    .compact-section { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 14px; }
+    .inline-choice { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .inline-choice button { min-height: 42px; }
+
+    .dialog-switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 12px 13px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: var(--panel);
+    }
+    .dialog-switch-row > span { display: grid; gap: 3px; }
+    .dialog-switch-row small { color: var(--muted); font-size: 11px; }
+    .dialog-switch-row input { width: 20px; height: 20px; accent-color: var(--lime); }
+
+    .dialog-actions { justify-content: flex-end; padding-top: 4px; }
+    .dialog-actions.split { justify-content: space-between; }
+    .dialog-actions button { min-height: 40px; padding: 0 18px; border-radius: 10px; background: var(--panel); color: var(--muted); }
+    .dialog-actions .primary-button { background: var(--lime); color: #fff; }
+
+    .bpm-dialog-value { display: flex; align-items: baseline; justify-content: center; gap: 8px; padding: 20px 0 10px; }
+    .bpm-dialog-value strong { color: var(--lime); font-size: 48px; letter-spacing: .04em; }
+    .bpm-dialog-value span { font-size: 17px; font-weight: 850; letter-spacing: .12em; }
+    #bpmDialogRange { width: 100%; accent-color: var(--lime); }
+
+    .layout-choice-list { display: grid; gap: 8px; }
+    .layout-choice-list button { display: grid; min-height: 64px; align-content: center; gap: 3px; text-align: left; }
+    .layout-choice-list button small { color: var(--muted); font-weight: 650; }
+
+    .dialog-field { display: grid; gap: 7px; }
+    .dialog-field span { color: var(--muted); font-size: 12px; font-weight: 750; }
+    .dialog-field input,
+    .library-search {
+      width: 100%;
+      min-height: 44px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      outline: 0;
+      background: var(--panel);
+      color: var(--text);
+    }
+
+    .library-list { display: grid; gap: 6px; max-height: min(420px, 50dvh); overflow: auto; }
+    .library-list button { display: grid; gap: 3px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--text); text-align: left; }
+    .library-list button.selected { border-color: var(--lime); }
+    .library-list button span { color: var(--muted); font-size: 11px; }
+    .library-empty { margin: 0; padding: 24px; color: var(--muted); text-align: center; }
+    .library-dialog-actions { flex-wrap: wrap; justify-content: flex-start; }
+    .danger-ghost-button { min-height: 36px; margin-left: auto; padding: 0 12px; border: 1px solid var(--red); border-radius: 10px; background: transparent; color: var(--red); }
+
+    @media (max-width: 640px) {
+      .shell { padding-top: 0; }
+      .tab-command-bar { min-height: 64px; border-right: 0; border-left: 0; border-radius: 0; }
+      .tab-command-bar button { padding: 8px 11px; }
+      .tab-command-bar strong { font-size: 15px; }
+      .score-actions-bar { margin-top: 7px; }
+      .score-panel { margin-top: 7px; }
+      .score-panel > .card-head { display: none; }
+      .score-scroll { padding: 0; }
+      .editor-toggle { margin-top: 7px; }
+      .key-choice-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .capo-choice-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .player-dialog form { gap: 14px; padding: 16px; }
+      .choice-grid button { min-height: 44px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <div class="brand-kicker">TAB · PLAYER</div>
+        <h1>吉他谱试听器</h1>
+        <p class="lede">粘贴有谱么风格的六线谱，定义和弦指形后直接试听。数字代表品位，<code>x</code> 读取当前和弦指形，<code>~</code> 作为轻击弦或勾弦播放。</p>
+      </div>
+      <div class="status-badge"><span class="status-dot"></span><span>浏览器本地合成 · 无需上传</span></div>
+    </header>
+
+    <div class="content-layout">
+    <nav class="tab-command-bar" aria-label="谱面参数">
+      <button id="openScoreConfigButton" type="button">
+        <strong><span id="keyDisplay">G调</span><i>›</i></strong>
+        <span id="capoMeterDisplay">不夹 · 4/4</span>
+      </button>
+      <button id="openBpmButton" type="button">
+        <strong><span id="bpmDisplay">60</span><i>›</i></strong>
+        <span>播放设置</span>
+      </button>
+      <button id="openLayoutButton" type="button">
+        <strong><span id="layoutDisplay">紧凑版</span><i>›</i></strong>
+        <span>排版</span>
+      </button>
+    </nav>
+
+    <section class="transport" aria-label="播放控制">
+      <div class="transport-buttons">
+        <button class="icon-button play" id="playButton" type="button" aria-label="播放">▶</button>
+        <button class="icon-button" id="replayButton" type="button" aria-label="返回开头，等待重播" title="返回开头，需手动播放">↻</button>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progress-meta"><span id="positionLabel">00:00.0</span><span id="durationLabel">00:00.0</span></div>
+        <div class="progress-track" id="progressTrack" role="slider" aria-label="播放位置" tabindex="0"><div class="progress-fill" id="progressFill"></div></div>
+      </div>
+
+      <div class="bpm-control">
+        <span class="bpm-label">BPM</span>
+        <input id="bpmRange" type="range" min="40" max="180" value="60">
+        <input id="bpmNumber" class="bpm-number" type="number" min="40" max="240" value="60" aria-label="BPM">
+      </div>
+
+      <div class="beat-control">
+        <span class="bpm-label">拍号</span>
+        <select id="beatsSelect" class="beats-select" aria-label="拍号">
+          <option value="4/4" selected>4/4</option>
+          <option value="6/8">6/8</option>
+        </select>
+      </div>
+
+      <div class="layout-control">
+        <span class="bpm-label">排版</span>
+        <select id="layoutSelect" class="layout-select" aria-label="谱面排版">
+          <option value="compact" selected>紧凑版</option>
+          <option value="timed">按时值</option>
+        </select>
+      </div>
+
+      <div class="tone-control">
+        <span class="bpm-label">音色</span>
+        <select id="toneSelect" class="tone-select" aria-label="吉他音色">
+          <option value="acoustic" selected>原声钢弦</option>
+        </select>
+      </div>
+
+      <div class="capo-control">
+        <span class="bpm-label">变调夹</span>
+        <select id="capoSelect" class="capo-select" aria-label="变调夹品位">
+          <option value="-1">降半调</option>
+          <option value="0" selected>不使用</option>
+          <option value="1">1 品</option><option value="2">2 品</option><option value="3">3 品</option>
+          <option value="4">4 品</option><option value="5">5 品</option><option value="6">6 品</option>
+        </select>
+      </div>
+
+      <label class="count-in-control" title="在实际声音出现前按当前 BPM 播放三声提示音">
+        <input id="countInToggle" type="checkbox" checked>
+        <span class="bpm-label">三拍提醒</span>
+      </label>
+
+      <label class="count-in-control" title="播放结束后从完整谱面开头自动往复">
+        <input id="loopToggle" type="checkbox">
+        <span class="bpm-label">自动往复</span>
+      </label>
+    </section>
+
+    <section class="score-panel card">
+      <div class="card-head">
+        <div>
+          <h2 class="card-title">谱面预览</h2>
+          <div class="card-subtitle" id="scoreHint">4/4 · 根据 % 节奏线排版</div>
+        </div>
+      </div>
+      <div class="score-scroll">
+        <svg id="scoreSvg" viewBox="0 0 1040 240" role="img" aria-label="六线谱预览"></svg>
+      </div>
+    </section>
+
+    <div class="right-pane">
+    <section class="score-actions-bar" aria-label="当前谱面">
+      <button class="current-score-button" id="openLibraryButton" type="button">
+        <span>当前谱面</span>
+        <strong id="currentScoreLabel">未保存谱面</strong>
+      </button>
+      <button class="ghost-button" id="saveScoreButton" type="button">保存</button>
+      <select id="scoreLibrarySelect" aria-label="已保存谱目" hidden><option value="">当前未保存谱面</option></select>
+      <input id="scoreNameInput" type="hidden">
+      <input id="scoreArtistInput" type="hidden">
+      <input id="keySelect" type="hidden" value="G">
+      <input id="importScoreInput" type="file" accept="application/json,.json" hidden>
+    </section>
+
+    <button class="editor-toggle" id="toggleEditorButton" type="button">编辑谱面与和弦</button>
+
+    <section class="workspace" id="editorWorkspace" hidden>
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">谱面文本</h2>
+            <div class="card-subtitle">“-”插整列，“|”插小节；按住 Alt 横向拖动可选择整列</div>
+          </div>
+          <div class="head-actions">
+            <button class="ghost-button" id="splitButton" type="button">分行</button>
+            <button class="ghost-button" id="mergeButton" type="button">合并</button>
+            <button class="ghost-button" id="numbersToXButton" type="button">品位→x</button>
+            <button class="ghost-button" id="xToNumbersButton" type="button">x→品位</button>
+            <button class="primary-button" id="validateButton" type="button">内容校验</button>
+          </div>
+        </div>
+        <div class="tab-editor-wrap">
+          <textarea id="tabInput" spellcheck="false" lang="en" inputmode="text" autocorrect="off" autocapitalize="off" aria-label="六线谱文本"></textarea>
+          <div class="column-selection-overlay" id="columnSelectionOverlay" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <aside class="side-stack">
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">和弦指形</h2>
+              <div class="card-subtitle">内置常用和弦库；这里填写的指形优先</div>
+            </div>
+          </div>
+          <textarea id="shapeInput" spellcheck="false" aria-label="和弦指形"></textarea>
+          <div class="shape-help">默认库来自<a href="https://yopu.co/chord" target="_blank" rel="noreferrer" style="color:var(--lime)">有谱么常用和弦表</a>。每行写作 <code>和弦名=六位指形</code> 可覆盖默认值，例如 <code>Fmaj7=1x3210</code>；高把位也可写成逗号格式。</div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">解析结果</h2>
+              <div class="card-subtitle">播放前会自动重新解析</div>
+            </div>
+          </div>
+          <div class="summary">
+            <div class="summary-grid">
+              <div class="metric"><strong id="noteCount">—</strong><span>发音数</span></div>
+              <div class="metric"><strong id="measureCount">—</strong><span>小节</span></div>
+              <div class="metric"><strong id="maxFret">—</strong><span>最高品</span></div>
+            </div>
+            <div class="chord-list" id="chordList"></div>
+            <div class="message" id="message">等待解析谱面。</div>
+            <div class="now-playing">
+              <div>
+                <div class="now-label">NOW PLAYING</div>
+                <div class="now-notes"><span class="now-chord" id="nowChord">—</span> <span id="nowNotes">准备就绪</span></div>
+              </div>
+              <div class="pulse-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+            </div>
+            <div class="footer-note">按有谱么规则：节奏行 <code>%</code> 对应列为空是四分音符，<code>-</code> 是八分、<code>=</code> 是十六分；需要 32 分音符时，在第二条 <code>%</code> 行的同一列补一个 <code>-</code>。本应用扩展规则：三个音以 <code>~</code> 连写，并在第二条节奏行末音下方写 <code>33</code>，会按原总时值均分为三连音。谱线内独立出现或紧跟音符的 <code>=</code> 会把本小节剩余时值补满。<code>% .</code> 为附点，<code>/</code>、<code>\</code> 为滑音，<code>u/d</code> 为上/下扫弦，<code>w/W</code> 为正/反向琶音，<code>R/r</code> 为休止符，<code>|</code> 为小节线。吉他采样来自 <a href="https://github.com/nbrosowsky/tonejs-instruments" target="_blank" rel="noreferrer" style="color:var(--lime)">tonejs-instruments</a>（CC BY 3.0）。</div>
+          </div>
+        </section>
+      </aside>
+    </section>
+    </div>
+    </div>
+
+    <dialog class="player-dialog config-dialog" id="scoreConfigDialog">
+      <form method="dialog">
+        <div class="dialog-heading"><strong>谱面设置</strong><button value="cancel" aria-label="关闭">×</button></div>
+        <section class="dialog-section">
+          <div class="dialog-section-title"><strong>原调</strong><button class="reset-text" id="resetKeyButton" type="button">重置</button></div>
+          <div class="choice-grid key-choice-grid" id="keyChoiceGrid"></div>
+          <p class="dialog-help">原调只用于标注谱子，不改变指法和声音。</p>
+        </section>
+        <section class="dialog-section">
+          <div class="dialog-section-title"><strong>变调夹</strong><button class="reset-text" id="resetCapoButton" type="button">重置</button></div>
+          <div class="choice-grid capo-choice-grid" id="capoChoiceGrid"></div>
+        </section>
+        <section class="dialog-section compact-section">
+          <strong>拍号</strong>
+          <div class="inline-choice" id="meterChoiceGrid"></div>
+        </section>
+        <div class="dialog-actions"><button class="primary-button" value="confirm">完成</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="player-dialog bpm-dialog" id="bpmDialog">
+      <form method="dialog">
+        <div class="dialog-heading"><strong>播放设置</strong><button value="cancel" aria-label="关闭">×</button></div>
+        <div class="bpm-dialog-value"><strong id="bpmDialogValue">60</strong><span>BPM</span></div>
+        <input id="bpmDialogRange" type="range" min="40" max="240" value="60">
+        <label class="dialog-switch-row"><span><strong>准备音</strong><small>播放前提示三拍</small></span><input id="countInSheetToggle" type="checkbox"></label>
+        <label class="dialog-switch-row"><span><strong>自动反复</strong><small>播完后从头继续</small></span><input id="loopSheetToggle" type="checkbox"></label>
+        <div class="dialog-actions split"><button id="resetBpmButton" type="button">重置（60）</button><button class="primary-button" value="confirm">确认</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="player-dialog layout-dialog" id="layoutDialog">
+      <form method="dialog">
+        <div class="dialog-heading"><strong>谱面排版</strong><button value="cancel" aria-label="关闭">×</button></div>
+        <div class="layout-choice-list" id="layoutChoiceList"></div>
+        <div class="dialog-actions"><button class="primary-button" value="confirm">完成</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="player-dialog save-dialog" id="saveScoreDialog">
+      <form method="dialog" id="saveScoreForm">
+        <div class="dialog-heading"><strong>保存到本地谱库</strong><button value="cancel" aria-label="关闭">×</button></div>
+        <label class="dialog-field"><span>谱名</span><input id="saveNameField" maxlength="80" autocomplete="off" placeholder="例如：晴天" required></label>
+        <label class="dialog-field"><span>歌手</span><input id="saveArtistField" maxlength="80" autocomplete="off" placeholder="例如：周杰伦"></label>
+        <div class="dialog-actions split"><button value="cancel">取消</button><button class="primary-button" id="confirmSaveButton" value="confirm">保存</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="player-dialog library-dialog" id="libraryDialog">
+      <form method="dialog">
+        <div class="dialog-heading"><strong>本地谱库</strong><button value="cancel" aria-label="关闭">×</button></div>
+        <input class="library-search" id="librarySearchInput" type="search" placeholder="搜索歌手或谱名" autocomplete="off">
+        <div class="library-list" id="libraryList"></div>
+        <div class="library-dialog-actions">
+          <button class="ghost-button" id="importScoreButton" type="button">导入单谱</button>
+          <button class="ghost-button" id="exportScoreButton" type="button">导出当前</button>
+          <button class="danger-ghost-button" id="deleteScoreButton" type="button" disabled>删除当前</button>
+        </div>
+      </form>
+    </dialog>
+  </main>
+
+  <script src="chords.js"></script>
+  <script>
+    const SAMPLE_TAB = `@
+|---------------|----------------|--------------------------|--------------|--------------5/7-5|3-----5--7~10-|7~10~7---------12-12-12\\*|5---3-5-3-5/7~*---|0-----<12>~*-|
+|-------5-3~5~3-|----0-------0~3-|-0~3~0-----------5-3~5~3--|---0------0~3-|-0~3~0-------------|---0----------|---------0---------------|---0--------------|---0---------|
+|---2/4---------|--0---0~2-2-----|---------0---2/4----------|-0--0~2-2-----|---------0---------|-0--0--0------|-------0--0--------------|-0----------------|-0--0--------|
+|---------------|2---------0-----|-------0--0---------------|2-------0-----|-------0--0--------|------0-------|-------------------------|------0-----------|-------------|
+|---------------|3---------------|--------------------------|3-------------|-------------------|3-------------|-------------------------|3-----------------|-------------|
+|RRr------------|----------------|-----3------3-------------|--------------|-----3------3------|--------------|-----0------0------------|------------------|0------------|
+%   === - =====  --- -====   ==-.  ===== -     --- - =====   -- -===   ==-.  ===== - --   ===-- -- -- -- ==--. ====== - -- ----     ---- -- -- --- ===--    -- --
+%         ---33                    ---33   -- ----   ---33                   ---33                             ----33            -------                                  `;
+
+    const SAMPLE_SHAPES = `C=x32010
+F=133211
+Dsus2=xx0230
+Gsus2=300233`;
+
+    const STRING_MIDI = [64, 59, 55, 50, 45, 40];
+    const STRING_NAMES = ["1弦", "2弦", "3弦", "4弦", "5弦", "6弦"];
+    const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+
+    const els = {
+      tab: document.querySelector("#tabInput"),
+      columnOverlay: document.querySelector("#columnSelectionOverlay"),
+      shapes: document.querySelector("#shapeInput"),
+      play: document.querySelector("#playButton"),
+      replay: document.querySelector("#replayButton"),
+      validate: document.querySelector("#validateButton"),
+      split: document.querySelector("#splitButton"),
+      merge: document.querySelector("#mergeButton"),
+      numbersToX: document.querySelector("#numbersToXButton"),
+      xToNumbers: document.querySelector("#xToNumbersButton"),
+      librarySelect: document.querySelector("#scoreLibrarySelect"),
+      scoreName: document.querySelector("#scoreNameInput"),
+      scoreArtist: document.querySelector("#scoreArtistInput"),
+      key: document.querySelector("#keySelect"),
+      saveScore: document.querySelector("#saveScoreButton"),
+      deleteScore: document.querySelector("#deleteScoreButton"),
+      importScore: document.querySelector("#importScoreButton"),
+      exportScore: document.querySelector("#exportScoreButton"),
+      importScoreInput: document.querySelector("#importScoreInput"),
+      bpmRange: document.querySelector("#bpmRange"),
+      bpmNumber: document.querySelector("#bpmNumber"),
+      beats: document.querySelector("#beatsSelect"),
+      layout: document.querySelector("#layoutSelect"),
+      tone: document.querySelector("#toneSelect"),
+      capo: document.querySelector("#capoSelect"),
+      countIn: document.querySelector("#countInToggle"),
+      loop: document.querySelector("#loopToggle"),
+      scoreSvg: document.querySelector("#scoreSvg"),
+      scoreHint: document.querySelector("#scoreHint"),
+      progress: document.querySelector("#progressTrack"),
+      fill: document.querySelector("#progressFill"),
+      position: document.querySelector("#positionLabel"),
+      duration: document.querySelector("#durationLabel"),
+      notes: document.querySelector("#noteCount"),
+      measures: document.querySelector("#measureCount"),
+      maxFret: document.querySelector("#maxFret"),
+      chordList: document.querySelector("#chordList"),
+      message: document.querySelector("#message"),
+      nowChord: document.querySelector("#nowChord"),
+      nowNotes: document.querySelector("#nowNotes"),
+      keyDisplay: document.querySelector("#keyDisplay"),
+      capoMeterDisplay: document.querySelector("#capoMeterDisplay"),
+      bpmDisplay: document.querySelector("#bpmDisplay"),
+      layoutDisplay: document.querySelector("#layoutDisplay"),
+      currentScoreLabel: document.querySelector("#currentScoreLabel"),
+      openScoreConfig: document.querySelector("#openScoreConfigButton"),
+      openBpm: document.querySelector("#openBpmButton"),
+      openLayout: document.querySelector("#openLayoutButton"),
+      openLibrary: document.querySelector("#openLibraryButton"),
+      toggleEditor: document.querySelector("#toggleEditorButton"),
+      editorWorkspace: document.querySelector("#editorWorkspace"),
+      scoreConfigDialog: document.querySelector("#scoreConfigDialog"),
+      bpmDialog: document.querySelector("#bpmDialog"),
+      layoutDialog: document.querySelector("#layoutDialog"),
+      saveScoreDialog: document.querySelector("#saveScoreDialog"),
+      libraryDialog: document.querySelector("#libraryDialog"),
+      keyChoiceGrid: document.querySelector("#keyChoiceGrid"),
+      capoChoiceGrid: document.querySelector("#capoChoiceGrid"),
+      meterChoiceGrid: document.querySelector("#meterChoiceGrid"),
+      countInSheet: document.querySelector("#countInSheetToggle"),
+      loopSheet: document.querySelector("#loopSheetToggle"),
+      resetKey: document.querySelector("#resetKeyButton"),
+      resetCapo: document.querySelector("#resetCapoButton"),
+      bpmDialogRange: document.querySelector("#bpmDialogRange"),
+      bpmDialogValue: document.querySelector("#bpmDialogValue"),
+      resetBpm: document.querySelector("#resetBpmButton"),
+      layoutChoiceList: document.querySelector("#layoutChoiceList"),
+      saveScoreForm: document.querySelector("#saveScoreForm"),
+      saveNameField: document.querySelector("#saveNameField"),
+      saveArtistField: document.querySelector("#saveArtistField"),
+      librarySearch: document.querySelector("#librarySearchInput"),
+      libraryList: document.querySelector("#libraryList"),
+    };
+
+    let score = null;
+    let audioContext = null;
+    let masterGain = null;
+    let harmonicConvolver = null;
+    let activeSources = [];
+    let playing = false;
+    let playFullStartNext = false;
+    let startContextTime = 0;
+    let startBeat = 0;
+    let pausedBeat = 0;
+    let playbackBpm = 60;
+    let rafId = 0;
+    let noteBufferCache = new Map();
+    let sampleBuffers = new Map();
+    let loadedBank = null;
+    let sampleLoadPromise = null;
+    let hostLatencyMs = 0;
+
+    const SAMPLE_BANKS = {
+      acoustic: [
+        [45, "assets/acoustic/A2.mp3"], [48, "assets/acoustic/C3.mp3"],
+        [52, "assets/acoustic/E3.mp3"], [55, "assets/acoustic/G3.mp3"],
+        [60, "assets/acoustic/C4.mp3"], [64, "assets/acoustic/E4.mp3"],
+      ],
+      nylon: [
+        [40, "assets/nylon/E2.mp3"], [45, "assets/nylon/A2.mp3"],
+        [47, "assets/nylon/B2.mp3"], [50, "assets/nylon/D3.mp3"],
+        [52, "assets/nylon/E3.mp3"], [55, "assets/nylon/G3.mp3"],
+        [59, "assets/nylon/B3.mp3"], [64, "assets/nylon/E4.mp3"],
+      ],
+    };
+
+    const KEY_OPTIONS = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+    const PINYIN_COLLATOR = new Intl.Collator("zh-CN-u-co-pinyin", { sensitivity: "base", numeric: true });
+
+    function capoLabel(value = getCapo()) {
+      if (value === -1) return "降半调";
+      return value ? `夹${value}品` : "不夹";
+    }
+
+    function scoreDisplayName(document) {
+      const artist = String(document?.artist || "").trim();
+      const name = String(document?.name || "未命名谱面").trim() || "未命名谱面";
+      return artist ? `${artist} · ${name}` : name;
+    }
+
+    function syncCompactControls() {
+      els.keyDisplay.textContent = `${els.key.value || "G"}调`;
+      els.capoMeterDisplay.textContent = `${capoLabel()} · ${els.beats.value}`;
+      els.bpmDisplay.textContent = String(getBpm());
+      els.layoutDisplay.textContent = els.layout.value === "timed" ? "按时值" : "紧凑版";
+      els.countInSheet.checked = els.countIn.checked;
+      els.loopSheet.checked = els.loop.checked;
+      els.currentScoreLabel.textContent = currentLibraryId
+        ? scoreDisplayName(scoreLibrary.find(item => item.id === currentLibraryId))
+        : "未保存谱面";
+    }
+
+    function renderOptionButtons() {
+      els.keyChoiceGrid.innerHTML = KEY_OPTIONS.map(key => `<button type="button" data-key="${key}" class="${els.key.value === key ? "selected" : ""}">${key}</button>`).join("");
+      els.capoChoiceGrid.innerHTML = [-1, 0, 1, 2, 3, 4, 5, 6].map(value => `<button type="button" data-capo="${value}" class="${getCapo() === value ? "selected" : ""}">${value === -1 ? "降半调" : value ? `${value}品` : "不夹"}</button>`).join("");
+      els.meterChoiceGrid.innerHTML = ["4/4", "6/8"].map(meter => `<button type="button" data-meter="${meter}" class="${els.beats.value === meter ? "selected" : ""}">${meter}</button>`).join("");
+      els.layoutChoiceList.innerHTML = [
+        ["compact", "紧凑版", "均匀排布音符，在有限空间内显示更多谱面"],
+        ["timed", "按时值", "按实际时值比例拉开音符距离"],
+      ].map(([value, label, help]) => `<button type="button" data-layout="${value}" class="${els.layout.value === value ? "selected" : ""}"><strong>${label}</strong><small>${help}</small></button>`).join("");
+    }
+
+    function applyScoreMetadata({ key = els.key.value, capo = els.capo.value, meter = els.beats.value } = {}) {
+      els.key.value = KEY_OPTIONS.includes(key) ? key : "G";
+      els.capo.value = String(Math.max(-1, Math.min(6, Number(capo) || 0)));
+      els.beats.value = meter === "6/8" ? "6/8" : "4/4";
+      localStorage.setItem("guitar-tab-key", els.key.value);
+      localStorage.setItem("guitar-tab-capo", els.capo.value);
+      localStorage.setItem("guitar-tab-meter", els.beats.value);
+      renderOptionButtons();
+      syncCompactControls();
+      parseScore();
+      if (playing && score) scheduleFrom(currentBeat());
+    }
+
+    function midiName(midi) {
+      return `${NOTE_NAMES[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`;
+    }
+
+    function parseShapeValue(value) {
+      const compact = value.trim().toLowerCase();
+      const parts = compact.includes(",") ? compact.split(",").map(part => part.trim()) : [...compact];
+      if (parts.length !== 6 || parts.some(part => part !== "x" && !/^\d+$/.test(part))) return null;
+      return parts.map(part => part === "x" ? null : Number(part));
+    }
+
+    function shapeLabel(shape) {
+      if (!shape) return "未定义";
+      const parts = shape.map(fret => fret == null ? "x" : String(fret));
+      return parts.some(part => part.length > 1) ? parts.join(",") : parts.join("");
+    }
+
+    function parseShapes(text) {
+      const shapes = new Map(Object.entries(window.YOPU_CHORDS || {}).map(([name, value]) => [name, parseShapeValue(value)]));
+      const errors = [];
+      text.split(/\r?\n/).forEach((raw, index) => {
+        const line = raw.trim();
+        if (!line || line.startsWith("#")) return;
+        const match = line.match(/^(.+?)\s*=\s*(.+)$/);
+        if (!match) {
+          errors.push(`指形第 ${index + 1} 行格式不正确：${raw}`);
+          return;
+        }
+        const shape = parseShapeValue(match[2]);
+        if (!shape) {
+          errors.push(`指形第 ${index + 1} 行不是六弦到一弦的六个品位：${raw}`);
+          return;
+        }
+        shapes.set(match[1].trim(), shape);
+      });
+      return { shapes, errors };
+    }
+
+    function chordMarkers(line) {
+      const cleaned = line.replace("@", " ");
+      const markers = [];
+      for (const match of cleaned.matchAll(/\S+/g)) markers.push({ column: match.index, name: match[0] });
+      return markers;
+    }
+
+    function chordAt(markers, column) {
+      let current = null;
+      for (const marker of markers) {
+        if (marker.column <= column) current = marker.name;
+        else break;
+      }
+      return current;
+    }
+
+    function barPositions(row) {
+      const bars = [];
+      for (let i = 0; i < row.length; i++) if (row[i] === "|") bars.push(i);
+      if (bars.length < 2) return [0, Math.max(1, row.length - 1)];
+      return bars;
+    }
+
+    function rhythmInfo(column, rhythmRows, tokenSpan = 1) {
+      const marks = rhythmRows
+        .map(row => row[column] || " ")
+        .filter(char => !/\s/.test(char));
+      const trailingDot = rhythmRows.some(row => row[column + tokenSpan] === ".");
+      if (!marks.length && !trailingDot) return { duration: 1, beamCount: 0, dotted: false };
+      const beamCount = marks.reduce((count, char) => count + (char === "=" ? 2 : char === "-" ? 1 : 0), 0);
+      let duration = beamCount ? 1 / (2 ** beamCount) : 1;
+      const dotted = marks.includes(".") || trailingDot;
+      if (dotted) duration *= 1.5;
+      return { duration, beamCount, dotted };
+    }
+
+    function restDuration(token) {
+      return ({ R2: 4, R1: 2, R: 1, r: .5, r1: .25, r2: .125, r3: .0625 })[token] || .5;
+    }
+
+    function normalizeTabPadding(rawText) {
+      const lines = rawText.replace(/\t/g, "  ").split(/\r?\n/);
+      for (let index = 0; index < lines.length; index++) {
+        if (!lines[index].trimStart().startsWith("@")) continue;
+        const rows = lines.slice(index + 1, index + 7);
+        if (rows.length < 6 || rows.some(row => !row.includes("|"))) continue;
+        const oldBars = barPositions(rows[0]);
+        const measureCount = oldBars.length - 1;
+        if (measureCount < 1) continue;
+        const segments = rows.map(row => row.split("|").slice(1, -1));
+        if (segments.some(parts => parts.length < measureCount)) continue;
+        const widths = [];
+        for (let measure = 0; measure < measureCount; measure++) {
+          let lastContent = 0;
+          segments.forEach(parts => {
+            const segment = parts[measure] || "";
+            for (let cursor = segment.length - 1; cursor >= 0; cursor--) {
+              if (segment[cursor] !== "-" && !/\s/.test(segment[cursor])) {
+                lastContent = Math.max(lastContent, cursor + 1);
+                break;
+              }
+            }
+          });
+          const compactWidth = Math.max(1, lastContent + 1);
+          widths.push(compactWidth);
+        }
+
+        const markers = chordMarkers(lines[index]);
+        const mappedMarkers = markers.map(marker => {
+          let measure = oldBars.findIndex((bar, barIndex) => barIndex < measureCount && marker.column > bar && marker.column < oldBars[barIndex + 1]);
+          if (measure < 0) measure = 0;
+          const local = Math.max(0, marker.column - oldBars[measure] - 1);
+          const newBar = widths.slice(0, measure).reduce((sum, width) => sum + width + 1, 0);
+          return { name: marker.name, column: newBar + 1 + Math.min(local, widths[measure] - 1) };
+        });
+        const totalRowLength = 1 + widths.reduce((sum, width) => sum + width + 1, 0);
+        const chordChars = Array(totalRowLength).fill(" ");
+        chordChars[0] = "@";
+        mappedMarkers.forEach(marker => [...marker.name].forEach((char, offset) => { if (marker.column + offset < chordChars.length) chordChars[marker.column + offset] = char; }));
+        lines[index] = chordChars.join("").trimEnd();
+        rows.forEach((row, rowIndex) => {
+          const rebuilt = widths.map((width, measure) => (segments[rowIndex][measure] || "").slice(0, width).padEnd(width, "-")).join("|");
+          lines[index + 1 + rowIndex] = `|${rebuilt}|`;
+        });
+        let rhythmIndex = index + 7;
+        while (rhythmIndex < lines.length && lines[rhythmIndex].trimStart().startsWith("%")) {
+          const rhythm = lines[rhythmIndex].padEnd(oldBars.at(-1) + 1, " ");
+          const rebuilt = widths.map((width, measure) => rhythm.slice(oldBars[measure] + 1, oldBars[measure + 1]).slice(0, width).padEnd(width, " ")).join(" ");
+          lines[rhythmIndex] = `%${rebuilt}`.trimEnd();
+          rhythmIndex += 1;
+        }
+      }
+      const spacedLines = [];
+      lines.forEach(line => {
+        if (line.trimStart().startsWith("@") && spacedLines.length && spacedLines.at(-1).trim() !== "") {
+          spacedLines.push("");
+        }
+        spacedLines.push(line);
+      });
+      return spacedLines.join("\n");
+    }
+
+    function canonicalizeRhythmLayers(rawText) {
+      const lines = rawText.split(/\r?\n/);
+      let changedBlocks = 0;
+      for (let blockStart = 0; blockStart < lines.length; blockStart++) {
+        if (!lines[blockStart].trimStart().startsWith("@")) continue;
+        const stringRows = lines.slice(blockStart + 1, blockStart + 7);
+        if (stringRows.length < 6) continue;
+        const width = Math.max(...stringRows.map(row => row.length));
+        const bars = barPositions(stringRows[0]);
+        let rhythmEnd = blockStart + 7;
+        while (rhythmEnd < lines.length && lines[rhythmEnd].trimStart().startsWith("%")) rhythmEnd += 1;
+        const originalRows = lines.slice(blockStart + 7, rhythmEnd);
+        if (!originalRows.length || !originalRows.some(row => row.includes("."))) continue;
+
+        const paddedOriginal = originalRows.map(row => row.padEnd(width, " "));
+        const dottedGroups = [];
+        let outputRowCount = originalRows.length;
+        for (let measure = 0; measure < bars.length - 1; measure++) {
+          const left = bars[measure] + 1;
+          const right = bars[measure + 1];
+          const depths = Array(width).fill(0);
+          const dots = new Set();
+          const otherMarks = new Map();
+          paddedOriginal.forEach(row => {
+            for (let column = left; column < right; column++) {
+              const mark = row[column];
+              if (mark === "=") depths[column] += 2;
+              else if (mark === "-") depths[column] += 1;
+              else if (mark === ".") dots.add(column);
+              else if (!/\s/.test(mark)) otherMarks.set(column, mark);
+            }
+          });
+          if (!dots.size) continue;
+          const active = Array.from({ length: width }, (_, column) => depths[column] > 0 || dots.has(column) || otherMarks.has(column));
+          const ranges = [...dots].map(column => {
+            let start = column;
+            let end = column + 1;
+            while (start > left && active[start - 1]) start -= 1;
+            while (end < right && active[end]) end += 1;
+            return { start, end };
+          }).sort((a, b) => a.start - b.start);
+          const mergedRanges = [];
+          ranges.forEach(range => {
+            const previous = mergedRanges.at(-1);
+            if (previous && range.start <= previous.end) previous.end = Math.max(previous.end, range.end);
+            else mergedRanges.push({ ...range });
+          });
+
+          mergedRanges.forEach(range => {
+            const maxDepth = Math.max(0, ...depths.slice(range.start, range.end));
+            if (!maxDepth) return;
+            let layers = Array.from({ length: maxDepth }, () => Array(width).fill(" "));
+            for (let column = range.start; column < range.end; column++) {
+              for (let layer = 0; layer < depths[column]; layer++) {
+                layers[maxDepth - 1 - layer][column] = "-";
+              }
+            }
+            const decorativeColumns = [...new Set([...dots, ...otherMarks.keys()])]
+              .filter(column => column >= range.start && column < range.end);
+            if (decorativeColumns.some(column => layers.every(row => row[column] !== " "))) {
+              layers.unshift(Array(width).fill(" "));
+            }
+            decorativeColumns.forEach(column => {
+              const row = layers.find(candidate => candidate[column] === " ") || layers[0];
+              row[column] = dots.has(column) ? "." : otherMarks.get(column);
+            });
+            outputRowCount = Math.max(outputRowCount, layers.length);
+            dottedGroups.push({ ...range, layers });
+          });
+        }
+
+        if (!dottedGroups.length) continue;
+        const output = Array.from({ length: outputRowCount }, () => Array(width).fill(" "));
+        output.forEach(row => { row[0] = "%"; });
+        paddedOriginal.forEach((row, rowIndex) => {
+          for (let column = 1; column < width; column++) output[rowIndex][column] = row[column];
+        });
+        dottedGroups.forEach(group => {
+          for (let row = 0; row < outputRowCount; row++) {
+            for (let column = group.start; column < group.end; column++) output[row][column] = " ";
+          }
+          const rowOffset = outputRowCount - group.layers.length;
+          group.layers.forEach((layer, layerIndex) => {
+            for (let column = group.start; column < group.end; column++) {
+              output[rowOffset + layerIndex][column] = layer[column];
+            }
+          });
+        });
+        // 节奏行必须与六线谱等宽；尾部空格是可编辑的节奏格，不能裁掉。
+        const replacement = output.map(row => row.join(""));
+        if (replacement.join("\n") !== originalRows.join("\n")) {
+          lines.splice(blockStart + 7, originalRows.length, ...replacement);
+          changedBlocks += 1;
+          blockStart += replacement.length;
+        }
+      }
+      return { text: lines.join("\n"), changedBlocks };
+    }
+
+    function convertChordFingeringNumbersToX(rawText, shapes) {
+      const lines = rawText.split(/\r?\n/);
+      let converted = 0;
+      for (let blockStart = 0; blockStart < lines.length; blockStart++) {
+        if (!lines[blockStart].trimStart().startsWith("@")) continue;
+        const markers = chordMarkers(lines[blockStart]);
+        for (let stringIndex = 0; stringIndex < 6; stringIndex++) {
+          const lineIndex = blockStart + 1 + stringIndex;
+          const row = lines[lineIndex];
+          if (row == null) continue;
+          let rebuilt = row;
+          for (let column = 0; column < rebuilt.length; column++) {
+            const insideHarmonic = rebuilt.lastIndexOf("<", column) > rebuilt.lastIndexOf(">", column);
+            if (!/\d/.test(rebuilt[column]) || insideHarmonic) continue;
+            const match = rebuilt.slice(column).match(/^\d+/);
+            if (!match) continue;
+            const chord = chordAt(markers, column);
+            const shape = shapes.get(chord);
+            const expectedFret = shape?.[5 - stringIndex];
+            if (expectedFret != null && Number(match[0]) === expectedFret) {
+              rebuilt = rebuilt.slice(0, column) + "x" + "-".repeat(match[0].length - 1) + rebuilt.slice(column + match[0].length);
+              converted += 1;
+            }
+            column += match[0].length - 1;
+          }
+          lines[lineIndex] = rebuilt;
+        }
+      }
+      return { text: lines.join("\n"), converted };
+    }
+
+    function convertChordXToFingeringNumbers(rawText, shapes) {
+      const lines = rawText.split(/\r?\n/);
+      let converted = 0;
+      let skipped = 0;
+      for (let blockStart = 0; blockStart < lines.length; blockStart++) {
+        if (!lines[blockStart].trimStart().startsWith("@")) continue;
+        const markers = chordMarkers(lines[blockStart]);
+        for (let stringIndex = 0; stringIndex < 6; stringIndex++) {
+          const lineIndex = blockStart + 1 + stringIndex;
+          let row = lines[lineIndex];
+          if (row == null) continue;
+          for (let column = 0; column < row.length; column++) {
+            if (row[column] !== "x" && row[column] !== "X") continue;
+            const chord = chordAt(markers, column);
+            const fret = shapes.get(chord)?.[5 - stringIndex];
+            if (fret == null) {
+              skipped += 1;
+              continue;
+            }
+            const digits = String(fret);
+            const extraWidth = digits.length - 1;
+            if (extraWidth && ![...row.slice(column + 1, column + 1 + extraWidth)].every(char => char === "-")) {
+              skipped += 1;
+              continue;
+            }
+            row = row.slice(0, column) + digits + row.slice(column + 1 + extraWidth);
+            converted += 1;
+            column += digits.length - 1;
+          }
+          lines[lineIndex] = row;
+        }
+      }
+      return { text: lines.join("\n"), converted, skipped };
+    }
+
+    function applyTabTextConversion(result, successLabel) {
+      if (result.text !== els.tab.value) {
+        const caret = els.tab.selectionStart;
+        els.tab.setRangeText(result.text, 0, els.tab.value.length, "end");
+        const nextCaret = Math.min(caret, result.text.length);
+        els.tab.setSelectionRange(nextCaret, nextCaret);
+        els.tab.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      parseScore();
+      const skippedText = result.skipped ? `；${result.skipped} 处因缺少指形或空间不足而保留` : "";
+      els.message.textContent = `${successLabel}：已转换 ${result.converted} 处${skippedText}。`;
+      els.message.classList.remove("error");
+    }
+
+    function reflowTabSystems(rawText, measuresPerSystem = Infinity) {
+      const normalized = normalizeTabPadding(rawText);
+      const lines = normalized.split(/\r?\n/);
+      const blocks = [];
+
+      for (let index = 0; index < lines.length; index++) {
+        if (!lines[index].trimStart().startsWith("@")) continue;
+        const rows = lines.slice(index + 1, index + 7);
+        if (rows.length < 6 || rows.some(row => !row.includes("|"))) continue;
+        const bars = barPositions(rows[0]);
+        if (bars.length < 2) continue;
+        let end = index + 7;
+        const rhythmRows = [];
+        while (end < lines.length && lines[end].trimStart().startsWith("%")) {
+          rhythmRows.push(lines[end]);
+          end += 1;
+        }
+        blocks.push({ start: index, end, chordLine: lines[index], rows, bars, rhythmRows });
+        index = end - 1;
+      }
+
+      if (!blocks.length) return normalized;
+      const measures = [];
+      blocks.forEach(block => {
+        const markers = chordMarkers(block.chordLine);
+        for (let measureIndex = 0; measureIndex < block.bars.length - 1; measureIndex++) {
+          const left = block.bars[measureIndex];
+          const right = block.bars[measureIndex + 1];
+          const width = Math.max(1, right - left - 1);
+          measures.push({
+            width,
+            rows: block.rows.map(row => row.slice(left + 1, right).padEnd(width, "-")),
+            rhythms: block.rhythmRows.map(row => row.slice(left + 1, right).padEnd(width, " ")),
+            markers: markers
+              .filter(marker => marker.column > left && marker.column < right)
+              .map(marker => ({ name: marker.name, local: marker.column - left - 1 })),
+          });
+        }
+      });
+
+      const groupSize = Number.isFinite(measuresPerSystem)
+        ? Math.max(1, Math.floor(measuresPerSystem))
+        : Math.max(1, measures.length);
+      const outputBlocks = [];
+      for (let offset = 0; offset < measures.length; offset += groupSize) {
+        const group = measures.slice(offset, offset + groupSize);
+        const rowLength = 1 + group.reduce((sum, measure) => sum + measure.width + 1, 0);
+        const chordChars = Array(rowLength).fill(" ");
+        chordChars[0] = "@";
+        let leftBar = 0;
+        group.forEach(measure => {
+          measure.markers.forEach(marker => {
+            const position = leftBar + 1 + Math.min(marker.local, measure.width - 1);
+            [...marker.name].forEach((char, charOffset) => {
+              if (position + charOffset < chordChars.length) chordChars[position + charOffset] = char;
+            });
+          });
+          leftBar += measure.width + 1;
+        });
+
+        const blockLines = [chordChars.join("").trimEnd()];
+        for (let stringIndex = 0; stringIndex < 6; stringIndex++) {
+          blockLines.push(`|${group.map(measure => measure.rows[stringIndex]).join("|")}|`);
+        }
+        const rhythmRowCount = Math.max(0, ...group.map(measure => measure.rhythms.length));
+        for (let rhythmIndex = 0; rhythmIndex < rhythmRowCount; rhythmIndex++) {
+          const rhythmChars = Array(rowLength).fill(" ");
+          rhythmChars[0] = "%";
+          let rhythmLeft = 0;
+          group.forEach(measure => {
+            const segment = measure.rhythms[rhythmIndex] || "".padEnd(measure.width, " ");
+            for (let column = 0; column < measure.width; column++) {
+              rhythmChars[rhythmLeft + 1 + column] = segment[column] || " ";
+            }
+            rhythmLeft += measure.width + 1;
+          });
+          blockLines.push(rhythmChars.join("").trimEnd());
+        }
+        outputBlocks.push(blockLines.join("\n"));
+      }
+
+      const first = blocks[0].start;
+      const last = blocks.at(-1).end;
+      // 有谱么的多行谱面以空行分隔：每个后续 @ 和弦行前必须保留完整空行。
+      const yopuSystemSeparator = "\n\n";
+      return [...lines.slice(0, first), outputBlocks.join(yopuSystemSeparator), ...lines.slice(last)].join("\n");
+    }
+
+    function applyTabReflow(measuresPerSystem, label) {
+      const reflowed = reflowTabSystems(els.tab.value, measuresPerSystem);
+      els.tab.setRangeText(reflowed, 0, els.tab.value.length, "end");
+      els.tab.setSelectionRange(0, 0);
+      els.tab.dispatchEvent(new Event("input", { bubbles: true }));
+      parseScore();
+      els.message.textContent = `${label}完成；已先校验内容并保持六弦、和弦与时值行对齐。`;
+      els.message.classList.remove("error");
+    }
+
+    function parseScore({ reset = true } = {}) {
+      const shapeResult = parseShapes(els.shapes.value);
+      const lines = els.tab.value.replace(/\t/g, "  ").split(/\r?\n/);
+      const meterLabel = els.beats.value === "6/8" ? "6/8" : "4/4";
+      const beatsPerMeasure = meterLabel === "6/8" ? 6 : 4;
+      const durationScale = meterLabel === "6/8" ? 2 : 1;
+      const events = [];
+      const rests = [];
+      const silentEvents = [];
+      const usedChords = new Set();
+      const warnings = [...shapeResult.errors];
+      const timingIssues = [];
+      let totalBeats = 0;
+      let blocks = 0;
+      let maxFret = 0;
+      const systems = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        if (!lines[i].trimStart().startsWith("@")) continue;
+        const rows = lines.slice(i + 1, i + 7);
+        if (rows.length < 6 || rows.some(row => !row.includes("|"))) {
+          warnings.push(`第 ${i + 1} 行之后没有找到完整六条弦。`);
+          continue;
+        }
+
+        const width = Math.max(...rows.map(row => row.length));
+        const padded = rows.map(row => row.padEnd(width, "-"));
+        const strumByColumn = new Map();
+        padded.forEach(row => {
+          for (let column = 0; column < row.length - 1; column++) {
+            const rawMarker = row[column];
+            const marker = rawMarker === "W" ? "W" : rawMarker.toLowerCase();
+            if ((marker === "u" || marker === "d" || marker === "w" || marker === "W") && /[xX\d<]/.test(row[column + 1])) {
+              if (!strumByColumn.has(column + 1) || marker === "w" || marker === "W") strumByColumn.set(column + 1, marker);
+            }
+          }
+        });
+        const markers = chordMarkers(lines[i]);
+        markers.forEach(marker => usedChords.add(marker.name));
+        const rhythmRows = [];
+        let nextLine = i + 7;
+        while (nextLine < lines.length && lines[nextLine].trimStart().startsWith("%")) {
+          rhythmRows.push(lines[nextLine].padEnd(width, " "));
+          nextLine += 1;
+        }
+
+        const blockEvents = [];
+        const restsByColumn = new Map();
+        const silentColumns = new Map();
+        const standaloneWholeNoteColumns = new Set();
+        for (let stringIndex = 0; stringIndex < 6; stringIndex++) {
+          const row = padded[stringIndex];
+          let previousNote = null;
+          for (let column = 0; column < row.length; column++) {
+            const tail = row.slice(column);
+            const restMatch = tail.match(/^(R2|R1|R|r3|r2|r1|r)/);
+            if (restMatch) {
+              if (!restsByColumn.has(column)) {
+                restsByColumn.set(column, { token: restMatch[0], column, blockIndex: blocks });
+              }
+              column += restMatch[0].length - 1;
+              continue;
+            }
+
+            const char = row[column];
+            const harmonicMatch = tail.match(/^<(\d+)>/);
+            if (char === "=" && row[column - 1] !== "=" && !/[xX\d>]/.test(row[column - 1] || "")) {
+              standaloneWholeNoteColumns.add(column);
+              continue;
+            }
+            if (char === "*") {
+              if (!silentColumns.has(column)) silentColumns.set(column, stringIndex);
+              continue;
+            }
+            if (char !== "x" && char !== "X" && !/\d/.test(char) && !harmonicMatch) continue;
+            let fret = null;
+            let tokenLength = 1;
+            let sourceType = "number";
+            const chord = chordAt(markers, column);
+            if (harmonicMatch) {
+              fret = Number(harmonicMatch[1]);
+              tokenLength = harmonicMatch[0].length;
+              sourceType = "harmonic";
+            } else if (char === "x" || char === "X") {
+              const shape = shapeResult.shapes.get(chord);
+              if (!shape) {
+                warnings.push(`缺少和弦 ${chord || "（未标注）"} 的指形，无法解析 ${STRING_NAMES[stringIndex]} 的 x。`);
+                continue;
+              }
+              const shapeFret = shape[5 - stringIndex];
+              if (shapeFret == null) {
+                warnings.push(`${chord} 的 ${STRING_NAMES[stringIndex]} 在指形中不发音，但谱面使用了 x。`);
+                continue;
+              }
+              fret = shapeFret;
+              sourceType = "x";
+            } else {
+              const numberMatch = tail.match(/^\d+/);
+              fret = Number(numberMatch[0]);
+              tokenLength = numberMatch[0].length;
+            }
+
+            const rawBetween = previousNote ? row.slice(previousNote.tokenEnd, column) : "";
+            const between = rawBetween.includes("|") ? "" : rawBetween.replace(/(?:~|[\\/])\*/g, "");
+            const hasTilde = between.includes("~");
+            const technique = between.includes("/")
+              ? "slideUp"
+              : between.includes("\\")
+                ? "slideDown"
+                : hasTilde && previousNote?.fret === fret
+                  ? "tie"
+                  : hasTilde
+                    ? "legato"
+                    : null;
+            maxFret = Math.max(maxFret, fret);
+            const postfix = row.slice(column + tokenLength);
+            const outgoingTechnique = /^\/\*/.test(postfix)
+              ? "slideOutUp"
+              : /^\\\*/.test(postfix)
+                ? "slideOutDown"
+                : /^~\*/.test(postfix)
+                  ? "sustainOut"
+                  : null;
+            const wholeNote = /^=+/.test(postfix);
+            const note = {
+              midi: STRING_MIDI[stringIndex] + fret,
+              stringIndex,
+              fret,
+              chord,
+              technique,
+              soft: technique === "legato" || technique === "mute" || sourceType === "harmonic",
+              column,
+              tokenEnd: column + tokenLength,
+              sourceType,
+              outgoingTechnique,
+              wholeNote,
+              strumType: strumByColumn.get(column) || null,
+              blockIndex: blocks,
+            };
+            blockEvents.push(note);
+            previousNote = note;
+            column += tokenLength - 1;
+          }
+        }
+
+        const blockRests = [...restsByColumn.values()];
+        const onsetColumns = [...new Set([...blockEvents.map(event => event.column), ...blockRests.map(rest => rest.column), ...silentColumns.keys(), ...standaloneWholeNoteColumns])].sort((a, b) => a - b);
+        const beatByColumn = new Map();
+        const infoByColumn = new Map();
+        const bars = barPositions(padded[0]);
+        const sourceMeasureCount = Math.max(1, bars.length - 1);
+        for (let measureIndex = 0; measureIndex < sourceMeasureCount; measureIndex++) {
+          const leftBar = bars[measureIndex];
+          const rightBar = bars[measureIndex + 1];
+          const measureColumns = onsetColumns.filter(column => column > leftBar && column < rightBar);
+          const measureInfos = measureColumns.map(column => {
+            const rest = restsByColumn.get(column);
+            const silent = silentColumns.has(column);
+            const wholeNote = standaloneWholeNoteColumns.has(column) || blockEvents.some(event => event.column === column && event.wholeNote);
+            const tokenSpan = Math.max(1, ...blockEvents.filter(event => event.column === column).map(event => event.tokenEnd - event.column));
+            const info = rest
+              ? { duration: restDuration(rest.token), beamCount: Math.max(0, Math.round(Math.log2(1 / restDuration(rest.token)))), dotted: false }
+              : wholeNote
+                ? { duration: 0, beamCount: 0, dotted: false, wholeNote: true, fillsMeasure: true }
+              : rhythmInfo(column, rhythmRows, tokenSpan);
+            if (!info.fillsMeasure) info.duration *= durationScale;
+            infoByColumn.set(column, info);
+            return { column, info, isRest: Boolean(rest), isSilent: silent };
+          });
+          const measureInfoByColumn = new Map(measureInfos.map(entry => [entry.column, entry.info]));
+          let tripletSequence = 0;
+          for (let stringIndex = 0; stringIndex < 6; stringIndex++) {
+            const stringEvents = blockEvents
+              .filter(event => event.stringIndex === stringIndex && event.column > leftBar && event.column < rightBar)
+              .sort((a, b) => a.column - b.column);
+            for (let eventIndex = 0; eventIndex <= stringEvents.length - 3; eventIndex++) {
+              const tripletEvents = stringEvents.slice(eventIndex, eventIndex + 3);
+              const [first, second, third] = tripletEvents;
+              const hasTwoTies = [second, third].every(event => event.technique === "legato" || event.technique === "tie");
+              const markerStart = Math.max(0, third.tokenEnd - 2);
+              const hasHiddenMarker = rhythmRows.some(row => row.slice(markerStart, third.tokenEnd) === "33");
+              const tripletInfos = tripletEvents.map(event => measureInfoByColumn.get(event.column));
+              const hasDistinctOnsets = new Set(tripletEvents.map(event => event.column)).size === 3;
+              if (!hasTwoTies || !hasHiddenMarker || !hasDistinctOnsets || tripletInfos.some(info => !info)) continue;
+              const tripletId = `${blocks}-${measureIndex}-${stringIndex}-${tripletSequence++}`;
+              const tripletDuration = tripletInfos.reduce((sum, info) => sum + info.duration, 0);
+              tripletInfos.forEach(info => {
+                info.duration = tripletDuration / 3;
+                info.beamCount = 2;
+                info.tripletId = tripletId;
+                info.tripletTotal = tripletDuration;
+              });
+              eventIndex += 2;
+            }
+          }
+          const fillEntries = measureInfos.filter(entry => entry.info.fillsMeasure);
+          if (fillEntries.length) {
+            const fixedDuration = measureInfos
+              .filter(entry => !entry.info.fillsMeasure)
+              .reduce((sum, entry) => sum + entry.info.duration, 0);
+            const fillDuration = Math.max(0, beatsPerMeasure - fixedDuration) / fillEntries.length;
+            fillEntries.forEach(entry => { entry.info.duration = fillDuration; });
+          }
+          let beamGroup = 0;
+          let previousBeamEntry = null;
+          measureInfos.forEach(entry => {
+            const hasContinuousBeam = previousBeamEntry
+              && !entry.isRest
+              && !previousBeamEntry.isRest
+              && entry.info.beamCount > 0
+              && previousBeamEntry.info.beamCount > 0
+              && rhythmRows.some(row => {
+                const bridge = row.slice(previousBeamEntry.column, entry.column + 1);
+                return bridge.length > 1 && [...bridge].every(char => char === "-" || char === "=" || char === ".");
+              });
+            if (!hasContinuousBeam) beamGroup += 1;
+            entry.info.beamGroup = beamGroup;
+            previousBeamEntry = entry;
+          });
+          const writtenDuration = measureInfos.reduce((sum, entry) => sum + entry.info.duration, 0);
+          const timingScale = writtenDuration > beatsPerMeasure ? beatsPerMeasure / writtenDuration : 1;
+          const difference = writtenDuration - beatsPerMeasure;
+          if (Math.abs(difference) > .001) {
+            const relation = difference > 0 ? "超出" : "不足";
+            const globalMeasureNumber = Math.round(totalBeats / beatsPerMeasure) + measureIndex + 1;
+            timingIssues.push({ measureNumber: globalMeasureNumber, writtenDuration, difference });
+            const writtenLabel = Number(writtenDuration.toFixed(3));
+            const differenceLabel = Number(Math.abs(difference).toFixed(3));
+            warnings.push(`时值勘误：第 ${globalMeasureNumber} 小节共 ${writtenLabel} 拍，${relation} ${differenceLabel} 拍。`);
+          }
+          let measureBeat = 0;
+          measureInfos.forEach(({ column, info }) => {
+            beatByColumn.set(column, measureIndex * beatsPerMeasure + measureBeat);
+            measureBeat += info.duration * timingScale;
+          });
+        }
+        const paddedBlockBeats = sourceMeasureCount * beatsPerMeasure;
+        const systemIndex = systems.length;
+
+        blockEvents.forEach(event => {
+          const info = infoByColumn.get(event.column);
+          Object.assign(event, info, { beat: totalBeats + beatByColumn.get(event.column), systemGlobalIndex: systemIndex });
+          events.push(event);
+        });
+        blockRests.forEach(rest => {
+          const info = infoByColumn.get(rest.column);
+          Object.assign(rest, info, { beat: totalBeats + beatByColumn.get(rest.column), systemGlobalIndex: systemIndex });
+          rests.push(rest);
+        });
+        silentColumns.forEach((stringIndex, column) => {
+          const info = infoByColumn.get(column);
+          silentEvents.push({
+            column,
+            stringIndex,
+            ...info,
+            beat: totalBeats + beatByColumn.get(column),
+            systemGlobalIndex: systemIndex,
+          });
+        });
+        standaloneWholeNoteColumns.forEach(column => {
+          const info = infoByColumn.get(column);
+          silentEvents.push({
+            column,
+            stringIndex: 2,
+            ...info,
+            wholeNote: true,
+            beat: totalBeats + beatByColumn.get(column),
+            systemGlobalIndex: systemIndex,
+          });
+        });
+
+        const first = onsetColumns[0];
+        const systemMarkers = first == null ? [] : markers.map(marker => {
+          const nextOnset = onsetColumns.find(column => column >= marker.column) ?? first;
+          return { ...marker, beat: totalBeats + beatByColumn.get(nextOnset) };
+        });
+        if (onsetColumns.length) {
+          systems.push({
+            index: systemIndex,
+            blockIndex: blocks,
+            startBeat: totalBeats,
+            duration: paddedBlockBeats,
+            markers: systemMarkers,
+            onsetColumns,
+            beatByColumn,
+            infoByColumn,
+          });
+        }
+
+        totalBeats += paddedBlockBeats;
+        blocks += 1;
+        i = nextLine - 1;
+      }
+
+      events.sort((a, b) => a.beat - b.beat || b.stringIndex - a.stringIndex);
+      rests.sort((a, b) => a.beat - b.beat);
+      silentEvents.sort((a, b) => a.beat - b.beat || b.stringIndex - a.stringIndex);
+      const dedupedWarnings = [...new Set(warnings)];
+      if (!blocks) dedupedWarnings.push("没有找到“@ 和弦行 + 六条弦”的谱面区块。");
+      if (!events.length && !rests.length) dedupedWarnings.push("没有解析到音符或休止符。");
+
+      const measures = totalBeats / beatsPerMeasure;
+      score = { events, rests, silentEvents, totalBeats, measures, maxFret, usedChords: [...usedChords], shapes: shapeResult.shapes, warnings: dedupedWarnings, timingIssues, systems, beatsPerMeasure, meterLabel };
+      updateSummary();
+      renderScore();
+      if (reset) stopPlayback();
+      return score;
+    }
+
+    function updateSummary() {
+      els.notes.textContent = score?.events.length ?? "—";
+      els.measures.textContent = score ? (Number.isInteger(score.measures) ? score.measures : score.measures.toFixed(1)) : "—";
+      els.maxFret.textContent = score ? `${score.maxFret}品` : "—";
+      els.chordList.innerHTML = "";
+      if (score) {
+        score.usedChords.forEach(name => {
+          const chip = document.createElement("span");
+          chip.className = "chord-chip";
+          const shape = score.shapes.get(name);
+          chip.innerHTML = `<span>${escapeHtml(name)}</span><code>${escapeHtml(shapeLabel(shape))}</code>`;
+          els.chordList.appendChild(chip);
+        });
+      }
+      const errors = score?.warnings || [];
+      els.message.className = `message${errors.length ? " error" : ""}`;
+      els.message.textContent = errors.length ? errors.join(" ") : `解析完成：${score.events.length} 个发音，点击播放即可试听。`;
+      const layoutName = els.layout.value === "compact" ? "紧凑版" : "按时值";
+      const capoValue = getCapo();
+      const capoSuffix = capoValue === -1 ? " · 降半调" : capoValue > 0 ? ` · 变调夹 ${capoValue} 品` : "";
+      els.scoreHint.textContent = score ? `${score.meterLabel} · ${score.totalBeats.toFixed(2).replace(/\.00$/, "")} 拍 · ${Number.isInteger(score.measures) ? score.measures : score.measures.toFixed(1)} 小节 · ${layoutName}${capoSuffix}` : `${els.beats.value} · ${layoutName}${capoSuffix}`;
+      updateDuration();
+    }
+
+    function diagramSvg(centerX, topY, name, shape) {
+      const width = 38;
+      const height = 30;
+      const left = centerX - width / 2;
+      const positive = shape ? shape.filter(fret => Number.isFinite(fret) && fret > 0) : [];
+      const startFret = positive.length && Math.max(...positive) > 4 ? Math.min(...positive) : 1;
+      let svg = `<text class="score-chord-name" x="${centerX}" y="${topY - 10}">${escapeHtml(name)}</text>`;
+      if (!shape) return svg;
+      for (let string = 0; string < 6; string++) {
+        const x = left + string * (width / 5);
+        svg += `<line class="diagram-grid" x1="${x}" y1="${topY}" x2="${x}" y2="${topY + height}"/>`;
+      }
+      for (let fret = 0; fret <= 4; fret++) {
+        const y = topY + fret * (height / 4);
+        svg += `<line class="diagram-grid" x1="${left}" y1="${y}" x2="${left + width}" y2="${y}"/>`;
+      }
+      if (startFret > 1) svg += `<text class="diagram-mark" x="${left - 8}" y="${topY + 9}">${startFret}</text>`;
+      shape.forEach((fret, string) => {
+        const x = left + string * (width / 5);
+        if (fret == null) svg += `<text class="diagram-mark" x="${x}" y="${topY - 3}">×</text>`;
+        else if (fret === 0) svg += `<circle cx="${x}" cy="${topY - 4}" r="2.3" fill="none" stroke="#d5d6cf" stroke-width="1"/>`;
+        else {
+          const row = fret - startFret;
+          const y = topY + (row + .5) * (height / 4);
+          svg += `<circle class="diagram-dot" cx="${x}" cy="${y}" r="3.1"/>`;
+        }
+      });
+      return svg;
+    }
+
+    function buildSystemLayout(system, x0 = 34, x1 = 1016) {
+      const measureCount = Math.max(1, Math.ceil(system.duration / score.beatsPerMeasure));
+      if (els.layout.value === "timed") {
+        return {
+          mode: "timed",
+          barXs: Array.from({ length: measureCount + 1 }, (_, index) => x0 + index / measureCount * (x1 - x0)),
+          anchors: [],
+          rightX: x1,
+        };
+      }
+
+      const onsetBeats = [...new Set([
+        ...score.events.filter(event => beatBelongsToSystem(event.beat, system)).map(event => event.beat),
+        ...score.rests.filter(rest => beatBelongsToSystem(rest.beat, system)).map(rest => rest.beat),
+        ...score.silentEvents.filter(event => beatBelongsToSystem(event.beat, system)).map(event => event.beat),
+      ].map(beat => Number(beat.toFixed(5))))].sort((a, b) => a - b);
+      const byMeasure = Array.from({ length: measureCount }, () => []);
+      onsetBeats.forEach(beat => {
+        const local = Math.max(0, beat - system.startBeat);
+        const index = Math.min(measureCount - 1, Math.floor(local / score.beatsPerMeasure));
+        byMeasure[index].push(beat);
+      });
+      const weights = byMeasure.map(beats => Math.max(1.35, beats.length + .7));
+      const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+      const availableWidth = x1 - x0;
+      const compactWidth = Math.min(availableWidth, Math.max(260, onsetBeats.length * 43 + measureCount * 24));
+      const rightX = x0 + compactWidth;
+      const barXs = [x0];
+      weights.forEach(weight => barXs.push(barXs.at(-1) + weight / totalWeight * compactWidth));
+      const anchors = [];
+      byMeasure.forEach((beats, measureIndex) => {
+        const left = barXs[measureIndex];
+        const right = barXs[measureIndex + 1];
+        const inset = Math.min(10, (right - left) * .12);
+        beats.forEach((beat, index) => {
+          const ratio = beats.length === 1 ? .5 : index / (beats.length - 1);
+          anchors.push({ beat, x: left + inset + ratio * (right - left - inset * 2) });
+        });
+      });
+      return { mode: "compact", barXs, anchors, rightX };
+    }
+
+    function beatBelongsToSystem(beat, system) {
+      const endBeat = system.startBeat + system.duration;
+      const isLast = endBeat >= score.totalBeats - .0001;
+      return beat >= system.startBeat - .0001 && (beat < endBeat - .0001 || (isLast && beat <= endBeat + .0001));
+    }
+
+    function measuresPerScoreLine() {
+      if (window.innerWidth <= 900) return 2;
+      return 3;
+    }
+
+    function buildDisplaySystems() {
+      const measuresPerLine = measuresPerScoreLine();
+      const measureCount = Math.max(1, Math.ceil(score.totalBeats / score.beatsPerMeasure));
+      const allMarkers = score.systems.flatMap(system => system.markers).sort((a, b) => a.beat - b.beat);
+      const displaySystems = [];
+      for (let firstMeasure = 0; firstMeasure < measureCount; firstMeasure += measuresPerLine) {
+        const startBeat = firstMeasure * score.beatsPerMeasure;
+        const duration = Math.min(measuresPerLine * score.beatsPerMeasure, score.totalBeats - startBeat);
+        const endBeat = startBeat + duration;
+        const activeMarker = [...allMarkers].reverse().find(marker => marker.beat <= startBeat + .0001);
+        const markers = allMarkers.filter(marker => marker.beat > startBeat + .0001 && marker.beat < endBeat - .0001);
+        if (activeMarker) markers.unshift({ ...activeMarker, beat: startBeat });
+        displaySystems.push({ index: displaySystems.length, measureNumber: firstMeasure + 1, startBeat, duration, markers });
+      }
+      return displaySystems;
+    }
+
+    let renderedScoreSystems = [];
+    let scoreRenderMetrics = { width: 1040, x0: 34, x1: 1016 };
+
+    function scoreXForBeat(system, beat, x0 = 34, x1 = 1016, layout = buildSystemLayout(system, x0, x1)) {
+      const localBeat = Math.max(0, Math.min(system.duration, beat - system.startBeat));
+      if (layout.mode === "timed") {
+        const measureCount = layout.barXs.length - 1;
+        if (localBeat >= system.duration - .0001) return x1;
+        const measureIndex = Math.min(measureCount - 1, Math.floor(localBeat / score.beatsPerMeasure));
+        const beatInMeasure = localBeat - measureIndex * score.beatsPerMeasure;
+        const left = layout.barXs[measureIndex];
+        const right = layout.barXs[measureIndex + 1];
+        const inset = Math.min(10, (right - left) * .08);
+        return left + inset + (beatInMeasure / score.beatsPerMeasure) * (right - left - inset * 2);
+      }
+      const anchors = layout.anchors;
+      if (!anchors.length) return x0;
+      if (beat <= anchors[0].beat) return anchors[0].x;
+      if (beat >= anchors.at(-1).beat) return anchors.at(-1).x;
+      const rightIndex = anchors.findIndex(anchor => anchor.beat >= beat);
+      const leftAnchor = anchors[rightIndex - 1];
+      const rightAnchor = anchors[rightIndex];
+      if (Math.abs(rightAnchor.beat - leftAnchor.beat) < .0001) return rightAnchor.x;
+      const ratio = (beat - leftAnchor.beat) / (rightAnchor.beat - leftAnchor.beat);
+      return leftAnchor.x + ratio * (rightAnchor.x - leftAnchor.x);
+    }
+
+    function renderScore() {
+      if (!score?.systems?.length) {
+        els.scoreSvg.setAttribute("viewBox", "0 0 1040 180");
+        els.scoreSvg.innerHTML = `<text x="520" y="90" text-anchor="middle" fill="#77796f" font-size="14">解析谱面后在这里显示六线谱</text>`;
+        return;
+      }
+      const containerWidth = els.scoreSvg.parentElement?.clientWidth || 1040;
+      const width = Math.max(340, Math.min(1040, Math.floor(containerWidth - 20)));
+      const displaySystems = buildDisplaySystems();
+      const x0 = width <= 640 ? 24 : 34;
+      const x1 = width - (width <= 640 ? 14 : 24);
+      let verticalCursor = 0;
+      displaySystems.forEach(system => {
+        const hasChordRow = system.markers.length > 0;
+        system.stringTop = verticalCursor + (hasChordRow ? 78 : 24);
+        system.renderHeight = hasChordRow ? 158 : 108;
+        verticalCursor += system.renderHeight;
+      });
+      const height = verticalCursor + 6;
+      renderedScoreSystems = displaySystems;
+      scoreRenderMetrics = { width, x0, x1 };
+      let svg = "";
+
+      displaySystems.forEach((system, systemIndex) => {
+        const stringTop = system.stringTop;
+        const stringBottom = stringTop + 55;
+        const beamY = stringBottom + 17;
+        const events = score.events.filter(event => beatBelongsToSystem(event.beat, system));
+        const rests = score.rests.filter(rest => beatBelongsToSystem(rest.beat, system));
+        const silentEvents = score.silentEvents.filter(event => beatBelongsToSystem(event.beat, system));
+        const layout = buildSystemLayout(system, x0, x1);
+        const systemRight = layout.rightX ?? x1;
+        const xForBeat = beat => scoreXForBeat(system, beat, x0, x1, layout);
+
+        svg += `<text class="score-system-number" x="${x0}" y="${stringTop - 11}">${system.measureNumber}</text>`;
+        for (let string = 0; string < 6; string++) {
+          const y = stringTop + string * 11;
+          svg += `<line class="score-line" x1="${x0}" y1="${y}" x2="${systemRight}" y2="${y}"/>`;
+        }
+        svg += `<line class="score-bar" x1="${x0}" y1="${stringTop}" x2="${x0}" y2="${stringBottom}"/>`;
+        for (let measure = 1; measure < layout.barXs.length - 1; measure++) {
+          const x = layout.barXs[measure];
+          svg += `<line class="score-bar" x1="${x}" y1="${stringTop}" x2="${x}" y2="${stringBottom}"/>`;
+        }
+        svg += `<line class="score-bar" x1="${systemRight}" y1="${stringTop}" x2="${systemRight}" y2="${stringBottom}"/>`;
+
+        for (let localMeasure = 0; localMeasure < layout.barXs.length - 1; localMeasure++) {
+          const measureNumber = system.measureNumber + localMeasure;
+          const issue = score.timingIssues.find(item => item.measureNumber === measureNumber);
+          if (!issue) continue;
+          const centerX = (layout.barXs[localMeasure] + layout.barXs[localMeasure + 1]) / 2;
+          const amount = Math.abs(issue.difference).toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+          const label = `${issue.difference > 0 ? "+" : "−"}${amount}拍`;
+          const badgeWidth = 46;
+          svg += `<rect class="timing-issue-bg" x="${centerX - badgeWidth / 2}" y="${stringTop - 19}" width="${badgeWidth}" height="13" rx="6.5"/>`;
+          svg += `<text class="timing-issue-text" x="${centerX}" y="${stringTop - 12.5}">${label}</text>`;
+        }
+
+        system.markers.forEach(marker => {
+          const diagramHalfWidth = 19;
+          const chordStartX = xForBeat(marker.beat);
+          const x = Math.max(x0 + diagramHalfWidth, Math.min(systemRight - diagramHalfWidth, chordStartX + diagramHalfWidth));
+          svg += diagramSvg(x, stringTop - 56, marker.name, score.shapes.get(marker.name));
+        });
+
+        const onsetGroups = new Map();
+        events.forEach(event => {
+          const key = event.beat.toFixed(5);
+          if (!onsetGroups.has(key)) onsetGroups.set(key, []);
+          onsetGroups.get(key).push(event);
+        });
+        onsetGroups.forEach(group => {
+          const strumType = group.find(event => event.strumType)?.strumType;
+          if (!strumType) return;
+          const x = xForBeat(group[0].beat) - 10;
+          const top = stringTop + Math.min(...group.map(event => event.stringIndex)) * 11 - 5;
+          const bottom = stringTop + Math.max(...group.map(event => event.stringIndex)) * 11 + 5;
+          if (strumType === "w" || strumType === "W") {
+            let path = `M ${x} ${top}`;
+            let y = top;
+            let direction = 1;
+            while (y < bottom) {
+              const nextY = Math.min(bottom, y + 4);
+              path += ` Q ${x + 3 * direction} ${(y + nextY) / 2}, ${x} ${nextY}`;
+              y = nextY;
+              direction *= -1;
+            }
+            svg += `<path class="score-arpeggio" d="${path}"/>`;
+            const arrowY = strumType === "w" ? top : bottom;
+            const arrowDirection = strumType === "w" ? 1 : -1;
+            svg += `<path class="score-arpeggio" d="M ${x - 3} ${arrowY + 5 * arrowDirection} L ${x} ${arrowY} L ${x + 3} ${arrowY + 5 * arrowDirection}"/>`;
+          } else {
+            const arrowTip = strumType === "u" ? bottom : top;
+            const arrowBase = strumType === "u" ? top : bottom;
+            svg += `<line class="score-arpeggio" x1="${x}" y1="${arrowBase}" x2="${x}" y2="${arrowTip}"/>`;
+            const direction = strumType === "u" ? -1 : 1;
+            svg += `<path class="score-arpeggio" d="M ${x - 3} ${arrowTip + 5 * direction} L ${x} ${arrowTip} L ${x + 3} ${arrowTip + 5 * direction}"/>`;
+          }
+        });
+        const entries = [
+          ...[...onsetGroups.values()].map(group => ({ kind: "note", beat: group[0].beat, duration: group[0].duration, beamCount: group[0].beamCount, beamGroup: group[0].beamGroup, dotted: group[0].dotted, wholeNote: group.some(event => event.wholeNote), tripletId: group[0].tripletId || null, tripletTotal: group[0].tripletTotal || null, group })),
+          ...silentEvents.map(event => ({ kind: "note", beat: event.beat, duration: event.duration, beamCount: event.beamCount, beamGroup: event.beamGroup, dotted: event.dotted, wholeNote: Boolean(event.wholeNote), group: [event], invisible: true })),
+          ...rests.map(rest => ({ kind: "rest", beat: rest.beat, duration: rest.duration, beamCount: rest.beamCount, dotted: rest.dotted, rest })),
+        ].sort((a, b) => a.beat - b.beat);
+
+        {
+          const infos = entries.map(entry => ({
+            ...entry,
+            x: xForBeat(entry.beat),
+            stemStartY: entry.kind === "note" ? stringTop + Math.max(...entry.group.map(event => event.stringIndex)) * 11 : null,
+          }));
+          infos.filter(info => info.kind === "note" && info.group.length > 1).forEach(info => {
+            const stringIndexes = info.group.map(event => event.stringIndex).sort((a, b) => a - b);
+            const topY = stringTop + stringIndexes[0] * 11;
+            const bottomY = stringTop + stringIndexes.at(-1) * 11;
+            if (bottomY > topY) {
+              svg += `<line class="score-chord-connector" x1="${info.x}" y1="${topY}" x2="${info.x}" y2="${bottomY}"/>`;
+            }
+          });
+          infos.filter(info => info.kind === "note" && info.duration <= 1 && !info.wholeNote).forEach(info => {
+            svg += `<line class="score-beam" x1="${info.x}" y1="${info.stemStartY}" x2="${info.x}" y2="${beamY}"/>`;
+          });
+
+          const primaryIsolated = new Set();
+          let primaryRun = [];
+          let primaryGroup = null;
+          const flushPrimary = () => {
+            if (primaryRun.length === 1) primaryIsolated.add(primaryRun[0]);
+            primaryRun = [];
+            primaryGroup = null;
+          };
+          infos.forEach(info => {
+            if (info.kind === "note" && info.beamCount >= 1) {
+              if (primaryRun.length && info.beamGroup !== primaryGroup) flushPrimary();
+              primaryGroup = info.beamGroup;
+              primaryRun.push(info);
+            } else flushPrimary();
+          });
+          flushPrimary();
+
+          const drawBeamRuns = (level, y) => {
+            let run = [];
+            let activeBeamGroup = null;
+            const flush = () => {
+              if (!run.length) return;
+              if (run.length === 1) {
+                const item = run[0];
+                const index = infos.indexOf(item);
+                const leftNeighbor = [...infos.slice(0, index)].reverse().find(candidate => candidate.kind === "note" && candidate.beamGroup === item.beamGroup && candidate.beamCount > 0);
+                const rightNeighbor = infos.slice(index + 1).find(candidate => candidate.kind === "note" && candidate.beamGroup === item.beamGroup && candidate.beamCount > 0);
+                const neighbor = [leftNeighbor, rightNeighbor]
+                  .filter(Boolean)
+                  .sort((a, b) => Math.abs(a.x - item.x) - Math.abs(b.x - item.x))[0] || null;
+                if (level > 1 && neighbor && !primaryIsolated.has(item)) {
+                  const direction = neighbor.x > item.x ? 1 : -1;
+                  const length = Math.min(13, Math.abs(neighbor.x - item.x) * .46);
+                  svg += `<line class="score-beam" x1="${item.x}" y1="${y}" x2="${item.x + direction * length}" y2="${y}"/>`;
+                } else {
+                  svg += `<path class="score-flag" d="M ${item.x} ${y} Q ${item.x + 10} ${y - 7}, ${item.x + 4} ${y - 14}"/>`;
+                }
+              } else {
+                svg += `<line class="score-beam" x1="${run[0].x}" y1="${y}" x2="${run[run.length - 1].x}" y2="${y}"/>`;
+              }
+              run = [];
+              activeBeamGroup = null;
+            };
+            infos.forEach(info => {
+              if (info.kind === "note" && info.beamCount >= level) {
+                if (run.length && info.beamGroup !== activeBeamGroup) flush();
+                activeBeamGroup = info.beamGroup;
+                run.push(info);
+              } else flush();
+            });
+            flush();
+          };
+          drawBeamRuns(1, beamY);
+          drawBeamRuns(2, beamY - 4);
+          drawBeamRuns(3, beamY - 8);
+          drawBeamRuns(4, beamY - 12);
+
+          infos.filter(info => info.kind === "note" && info.dotted).forEach(info => {
+            const groupBeamCount = Math.max(info.beamCount, ...infos
+              .filter(candidate => candidate.kind === "note" && candidate.beamGroup === info.beamGroup)
+              .map(candidate => candidate.beamCount));
+            const dotY = beamY - Math.max(0, groupBeamCount - 1) * 4 - 1.5;
+            svg += `<circle class="score-dot" cx="${info.x + 4}" cy="${dotY}" r="1.5"/>`;
+          });
+          infos.filter(info => info.kind === "note" && info.wholeNote).forEach(info => {
+            const wholeNoteY = stringTop + 27.5;
+            svg += `<line class="score-whole-note" x1="${info.x - 3.5}" y1="${wholeNoteY}" x2="${info.x + 3.5}" y2="${wholeNoteY}"/>`;
+          });
+          const tripletGroups = new Map();
+          infos.filter(info => info.kind === "note" && info.tripletId).forEach(info => {
+            if (!tripletGroups.has(info.tripletId)) tripletGroups.set(info.tripletId, []);
+            tripletGroups.get(info.tripletId).push(info);
+          });
+          tripletGroups.forEach(group => {
+            const items = [...group].sort((a, b) => a.x - b.x);
+            if (items.length < 3) return;
+            const first = items[0];
+            const last = items.at(-1);
+            const centerX = (first.x + last.x) / 2;
+            const bracketY = beamY + 12;
+            svg += `<path class="score-triplet-line" d="M ${first.x} ${bracketY - 4} V ${bracketY} H ${centerX - 5} M ${centerX + 5} ${bracketY} H ${last.x} V ${bracketY - 4}"/>`;
+            svg += `<rect class="score-triplet-bg" x="${centerX - 5}" y="${bracketY - 5}" width="10" height="10" rx="2"/>`;
+            svg += `<text class="score-triplet-text" x="${centerX}" y="${bracketY}">3</text>`;
+          });
+        }
+
+        const restGlyph = { R2: "&#x1D13B;", R1: "&#x1D13C;", R: "&#x1D13D;", r: "&#x1D13E;", r1: "&#x1D13F;", r2: "&#x1D140;", r3: "&#x1D141;" };
+        rests.forEach(rest => {
+          const x = xForBeat(rest.beat);
+          svg += `<text class="score-rest" x="${x}" y="${stringTop + 28}">${restGlyph[rest.token] || rest.token}</text>`;
+        });
+
+        events.forEach(event => {
+          const x = xForBeat(event.beat);
+          const y = stringTop + event.stringIndex * 11;
+          const previous = [...events].reverse().find(candidate => candidate.stringIndex === event.stringIndex && candidate.beat < event.beat);
+          const tripletPeers = event.tripletId
+            ? events
+                .filter(candidate => candidate.tripletId === event.tripletId && candidate.stringIndex === event.stringIndex)
+                .sort((a, b) => a.beat - b.beat)
+            : [];
+          const isCompleteTriplet = tripletPeers.length >= 3;
+          if (isCompleteTriplet && event === tripletPeers.at(-1)) {
+            const firstX = xForBeat(tripletPeers[0].beat);
+            svg += `<path class="score-legato" d="M ${firstX + 3} ${y - 4} Q ${(firstX + x) / 2} ${y - 19} ${x - 3} ${y - 4}"/>`;
+          } else if (!isCompleteTriplet && previous && (event.technique === "legato" || event.technique === "tie")) {
+            const px = xForBeat(previous.beat);
+            svg += `<path class="score-legato" d="M ${px + 3} ${y - 4} Q ${(px + x) / 2} ${y - 16} ${x - 3} ${y - 4}"/>`;
+          } else if (previous && (event.technique === "slideUp" || event.technique === "slideDown")) {
+            const px = xForBeat(previous.beat);
+            const direction = event.technique === "slideUp" ? 1 : -1;
+            svg += `<line class="score-slide" x1="${px + 7}" y1="${y + 4 * direction}" x2="${x - 7}" y2="${y - 4 * direction}"/>`;
+          }
+          if (event.outgoingTechnique === "slideOutUp" || event.outgoingTechnique === "slideOutDown") {
+            const direction = event.outgoingTechnique === "slideOutUp" ? 1 : -1;
+            svg += `<line class="score-slide" x1="${x + 7}" y1="${y + 4 * direction}" x2="${Math.min(systemRight - 3, x + 23)}" y2="${y - 4 * direction}"/>`;
+          } else if (event.outgoingTechnique === "sustainOut") {
+            svg += `<path class="score-legato" d="M ${x + 3} ${y - 4} Q ${Math.min(systemRight - 5, x + 17)} ${y - 13} ${Math.min(systemRight - 2, x + 28)} ${y - 4}"/>`;
+          }
+          if (event.sourceType === "harmonic") {
+            const radius = event.fret >= 10 ? 9 : 7;
+            svg += `<polygon class="score-harmonic" points="${x},${y - 7} ${x + radius},${y} ${x},${y + 7} ${x - radius},${y}"/>`;
+            svg += `<text class="score-special" x="${x}" y="${y}">${event.fret}</text>`;
+          } else if (event.sourceType === "star") {
+            svg += `<circle class="score-note-bg" cx="${x}" cy="${y}" r="6.5"/>`;
+            svg += `<text class="score-special" x="${x}" y="${y}">*</text>`;
+          } else if (event.sourceType === "x") {
+            svg += `<rect class="score-note-bg" x="${x - 5}" y="${y - 5}" width="10" height="10" rx="5"/>`;
+            svg += `<text class="score-x" x="${x}" y="${y}">×</text>`;
+          } else {
+            const radius = event.fret >= 10 ? 8 : 6.2;
+            svg += `<circle class="score-note-bg" cx="${x}" cy="${y}" r="${radius}"/>`;
+            svg += `<text class="score-note-text" x="${x}" y="${y}">${event.fret}</text>`;
+          }
+        });
+      });
+
+      const firstStringTop = displaySystems[0]?.stringTop ?? 24;
+      svg += `<line id="scorePlayhead" class="playhead" x1="${x0}" y1="${firstStringTop - 9}" x2="${x0}" y2="${firstStringTop + 73}"/>`;
+      els.scoreSvg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+      els.scoreSvg.innerHTML = svg;
+      setPlayheadPosition(pausedBeat);
+    }
+
+    function visualPositionForBeat(beat) {
+      if (!renderedScoreSystems.length) return null;
+      let system = renderedScoreSystems.find(item => beatBelongsToSystem(beat, item));
+      if (!system) system = beat < renderedScoreSystems[0].startBeat ? renderedScoreSystems[0] : renderedScoreSystems[renderedScoreSystems.length - 1];
+      const { x0, x1 } = scoreRenderMetrics;
+      const x = scoreXForBeat(system, beat, x0, x1);
+      const y1 = system.stringTop - 9;
+      return { x, y1, y2: y1 + 73 };
+    }
+
+    function setPlayheadPosition(beat) {
+      const visual = visualPositionForBeat(beat);
+      const playhead = document.querySelector("#scorePlayhead");
+      if (!visual || !playhead) return;
+      playhead.setAttribute("x1", visual.x);
+      playhead.setAttribute("x2", visual.x);
+      playhead.setAttribute("y1", visual.y1);
+      playhead.setAttribute("y2", visual.y2);
+    }
+
+    function escapeHtml(value) {
+      return value.replace(/[&<>"]/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"})[char]);
+    }
+
+    function getBpm() { return Math.max(40, Math.min(240, Number(els.bpmNumber.value) || 60)); }
+    function getCapo() { return Math.max(-1, Math.min(6, Number(els.capo.value) || 0)); }
+    function secondsForBeat(beat, bpm = getBpm()) { return beat * 60 / bpm; }
+
+    function formatTime(seconds) {
+      const safe = Math.max(0, seconds || 0);
+      const minutes = Math.floor(safe / 60).toString().padStart(2, "0");
+      const secs = (safe % 60).toFixed(1).padStart(4, "0");
+      return `${minutes}:${secs}`;
+    }
+
+    function updateDuration() {
+      const duration = score ? secondsForBeat(score.totalBeats) : 0;
+      els.duration.textContent = formatTime(duration);
+    }
+
+    function ensureAudio() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        masterGain = audioContext.createGain();
+        masterGain.gain.value = 0.82;
+        const warmth = audioContext.createBiquadFilter();
+        const compressor = audioContext.createDynamicsCompressor();
+        const delay = audioContext.createDelay(0.5);
+        const feedback = audioContext.createGain();
+        const wet = audioContext.createGain();
+        harmonicConvolver = audioContext.createConvolver();
+        const harmonicWet = audioContext.createGain();
+        warmth.type = "lowpass";
+        warmth.frequency.value = 7600;
+        warmth.Q.value = .4;
+        compressor.threshold.value = -16;
+        compressor.knee.value = 14;
+        compressor.ratio.value = 3;
+        compressor.attack.value = .008;
+        compressor.release.value = .22;
+        delay.delayTime.value = 0.09;
+        feedback.gain.value = 0.11;
+        wet.gain.value = 0.10;
+        harmonicWet.gain.value = .16;
+        const impulseLength = Math.floor(audioContext.sampleRate * .78);
+        const impulse = audioContext.createBuffer(2, impulseLength, audioContext.sampleRate);
+        for (let channel = 0; channel < 2; channel++) {
+          const data = impulse.getChannelData(channel);
+          for (let index = 0; index < impulseLength; index++) {
+            const envelope = (1 - index / impulseLength) ** 3.2;
+            data[index] = (Math.random() * 2 - 1) * envelope;
+          }
+        }
+        harmonicConvolver.buffer = impulse;
+        masterGain.connect(warmth).connect(compressor).connect(audioContext.destination);
+        masterGain.connect(delay);
+        delay.connect(feedback);
+        feedback.connect(delay);
+        delay.connect(wet);
+        wet.connect(compressor);
+        harmonicConvolver.connect(harmonicWet).connect(compressor);
+      }
+      if (audioContext.state === "suspended") audioContext.resume();
+    }
+
+    async function loadSampleBank(bank) {
+      ensureAudio();
+      if (loadedBank === bank && sampleBuffers.size) return;
+      if (sampleLoadPromise) return sampleLoadPromise;
+      els.message.className = "message";
+      els.message.textContent = `正在加载${bank === "nylon" ? "尼龙弦" : "原声钢弦"}采样…`;
+      sampleLoadPromise = Promise.all(SAMPLE_BANKS[bank].map(async ([midi, url]) => {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`无法加载 ${url}`);
+        const buffer = await audioContext.decodeAudioData(await response.arrayBuffer());
+        return [midi, buffer];
+      })).then(entries => {
+        sampleBuffers = new Map(entries);
+        loadedBank = bank;
+        els.message.textContent = `真实${bank === "nylon" ? "尼龙弦" : "原声钢弦"}采样已就绪。`;
+      }).catch(error => {
+        sampleBuffers.clear();
+        loadedBank = null;
+        els.message.className = "message error";
+        els.message.textContent = `${error.message}，已切换为合成拨弦音色。`;
+      }).finally(() => { sampleLoadPromise = null; });
+      return sampleLoadPromise;
+    }
+
+    function pluckBuffer(midi, soft) {
+      const key = `${midi}:${soft ? 1 : 0}`;
+      if (noteBufferCache.has(key)) return noteBufferCache.get(key);
+      const sampleRate = audioContext.sampleRate;
+      const duration = 2.35;
+      const length = Math.floor(sampleRate * duration);
+      const frequency = 440 * 2 ** ((midi - 69) / 12);
+      const delay = Math.max(2, Math.round(sampleRate / frequency));
+      const data = new Float32Array(length);
+      const ring = new Float32Array(delay);
+      for (let i = 0; i < delay; i++) ring[i] = (Math.random() * 2 - 1) * (soft ? .38 : .82);
+      const damping = midi < 54 ? .9954 : .9941;
+      let previous = ring[delay - 1];
+      for (let i = 0; i < length; i++) {
+        const index = i % delay;
+        const current = ring[index];
+        const filtered = damping * .5 * (current + previous);
+        ring[index] = filtered;
+        previous = current;
+        const attack = Math.min(1, i / (sampleRate * (soft ? .014 : .004)));
+        data[i] = current * attack * Math.exp(-i / sampleRate * (midi < 52 ? 1.18 : 1.48));
+      }
+      const buffer = audioContext.createBuffer(1, length, sampleRate);
+      buffer.copyToChannel(data, 0);
+      noteBufferCache.set(key, buffer);
+      return buffer;
+    }
+
+    function stopSources() {
+      activeSources.forEach(source => { try { source.stop(); } catch (_) {} });
+      activeSources = [];
+    }
+
+    function nearestSample(midi) {
+      let result = null;
+      for (const [root, buffer] of sampleBuffers) {
+        if (!result || Math.abs(root - midi) < Math.abs(result.root - midi)) result = { root, buffer };
+      }
+      return result;
+    }
+
+    function scheduleCountIn(firstClick, secondsPerBeat) {
+      for (let index = 0; index < 3; index++) {
+        const when = firstClick + index * secondsPerBeat;
+        const oscillator = audioContext.createOscillator();
+        const clickGain = audioContext.createGain();
+        oscillator.type = "triangle";
+        oscillator.frequency.value = index === 2 ? 1160 : 880;
+        clickGain.gain.setValueAtTime(0.0001, when);
+        clickGain.gain.exponentialRampToValueAtTime(0.26, when + .004);
+        clickGain.gain.exponentialRampToValueAtTime(0.0001, when + .07);
+        oscillator.connect(clickGain).connect(audioContext.destination);
+        oscillator.start(when);
+        oscillator.stop(when + .08);
+        activeSources.push(oscillator);
+      }
+    }
+
+    async function scheduleFrom(beat, { countIn = false } = {}) {
+      ensureAudio();
+      await loadSampleBank(els.tone.value);
+      stopSources();
+      playbackBpm = getBpm();
+      startBeat = beat;
+      const secondsPerBeat = 60 / playbackBpm;
+      const earliestStart = audioContext.currentTime + .08;
+      const firstSoundBeat = score.events.find(event => event.beat + .0001 >= beat && event.technique !== "tie")?.beat ?? beat;
+      const reminderOffset = (firstSoundBeat - beat - 3) * secondsPerBeat;
+      const preRoll = countIn ? Math.max(0, -reminderOffset) : 0;
+      startContextTime = earliestStart + preRoll;
+      if (countIn) scheduleCountIn(startContextTime + reminderOffset, secondsPerBeat);
+
+      for (const event of score.events) {
+        if (event.beat + 0.0001 < beat) continue;
+        if (event.technique === "tie") continue;
+        const source = audioContext.createBufferSource();
+        const gain = audioContext.createGain();
+        const pan = audioContext.createStereoPanner();
+        const soundingMidi = event.midi + getCapo();
+        const sample = nearestSample(soundingMidi);
+        let targetRate = 1;
+        if (sample) {
+          source.buffer = sample.buffer;
+          targetRate = 2 ** ((soundingMidi - sample.root) / 12);
+        } else {
+          source.buffer = pluckBuffer(soundingMidi, event.soft);
+        }
+        gain.gain.value = (event.soft ? .42 : .68) * (event.stringIndex >= 4 ? 1.06 : 1);
+        pan.pan.value = (2.5 - event.stringIndex) / 8;
+        if (event.sourceType === "harmonic") {
+          const shimmer = audioContext.createBiquadFilter();
+          shimmer.type = "highpass";
+          shimmer.frequency.value = 980;
+          shimmer.Q.value = 1.15;
+          source.connect(shimmer).connect(gain).connect(pan).connect(masterGain);
+          shimmer.connect(harmonicConvolver);
+          gain.gain.value *= .72;
+        } else {
+          source.connect(gain).connect(pan).connect(masterGain);
+        }
+        let strumOffset = 0;
+        if (event.strumType) {
+          const sameOnset = score.events
+            .filter(candidate => Math.abs(candidate.beat - event.beat) < .0001 && candidate.strumType === event.strumType)
+            .sort((a, b) => (event.strumType === "u" || event.strumType === "W") ? a.stringIndex - b.stringIndex : b.stringIndex - a.stringIndex);
+          const rank = sameOnset.findIndex(candidate => candidate === event);
+          strumOffset = Math.max(0, rank) * ((event.strumType === "w" || event.strumType === "W") ? .022 : .011);
+        }
+        const when = startContextTime + (event.beat - beat) * secondsPerBeat + strumOffset + (!event.strumType && event.stringIndex < 2 ? .007 : 0);
+        const previous = [...score.events].reverse().find(candidate => candidate.stringIndex === event.stringIndex && candidate.beat < event.beat);
+        const isSlide = previous && (event.technique === "slideUp" || event.technique === "slideDown");
+        const slideSeconds = Math.min(.18, secondsPerBeat * .32);
+        const sourceStart = isSlide ? Math.max(startContextTime, when - slideSeconds) : when;
+        if (isSlide) {
+          const fromRate = targetRate * 2 ** ((previous.midi - event.midi) / 12);
+          source.playbackRate.setValueAtTime(fromRate, sourceStart);
+          source.playbackRate.exponentialRampToValueAtTime(targetRate, when);
+          gain.gain.setValueAtTime(.0001, sourceStart);
+          gain.gain.exponentialRampToValueAtTime((event.soft ? .42 : .68) * .84, when);
+        } else {
+          source.playbackRate.setValueAtTime(targetRate, sourceStart);
+        }
+        source.start(sourceStart);
+        if (event.outgoingTechnique === "slideOutUp" || event.outgoingTechnique === "slideOutDown") {
+          const bendAt = when + Math.min(.28, event.duration * secondsPerBeat * .55);
+          const bendRate = targetRate * 2 ** ((event.outgoingTechnique === "slideOutUp" ? 2 : -2) / 12);
+          source.playbackRate.setValueAtTime(targetRate, bendAt);
+          source.playbackRate.exponentialRampToValueAtTime(bendRate, bendAt + .24);
+          gain.gain.setValueAtTime(Math.max(.08, gain.gain.value), bendAt);
+          gain.gain.exponentialRampToValueAtTime(.0001, bendAt + .32);
+          source.stop(bendAt + .34);
+        }
+        activeSources.push(source);
+      }
+
+      playing = true;
+      document.body.classList.add("playing");
+      updatePlayButton();
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(tick);
+    }
+
+    function currentBeat() {
+      if (!playing || !audioContext) return pausedBeat;
+      return Math.min(score.totalBeats, startBeat + Math.max(0, audioContext.currentTime - startContextTime) * playbackBpm / 60);
+    }
+
+    function tick() {
+      if (!score) return;
+      const beat = currentBeat();
+      const visualBeat = Math.max(0, beat - Math.max(0, hostLatencyMs) * playbackBpm / 60000);
+      pausedBeat = beat;
+      const ratio = score.totalBeats ? beat / score.totalBeats : 0;
+      els.fill.style.width = `${Math.min(100, ratio * 100)}%`;
+      els.position.textContent = formatTime(secondsForBeat(beat, playbackBpm));
+      updateNowPlaying(visualBeat);
+      setPlayheadPosition(visualBeat);
+      if (beat >= score.totalBeats) {
+        playing = false;
+        document.body.classList.remove("playing");
+        updatePlayButton();
+        if (els.loop.checked) {
+          pausedBeat = 0;
+          void scheduleFrom(0, { countIn: els.countIn.checked });
+          return;
+        }
+        pausedBeat = score.totalBeats;
+        playFullStartNext = true;
+        return;
+      }
+      if (playing) rafId = requestAnimationFrame(tick);
+    }
+
+    function updateNowPlaying(beat) {
+      if (!score?.events.length) return;
+      const nearby = score.events.filter(event => Math.abs(event.beat - beat) < .13);
+      let latest = null;
+      for (const event of score.events) {
+        if (event.beat <= beat + .02) latest = event;
+        else break;
+      }
+      els.nowChord.textContent = latest?.chord || "—";
+      els.nowNotes.textContent = nearby.length
+        ? [...new Set(nearby.map(event => midiName(event.midi + getCapo())))].join(" · ")
+        : latest ? midiName(latest.midi + getCapo()) : "准备就绪";
+    }
+
+    function updatePlayButton() {
+      els.play.textContent = playing ? "Ⅱ" : "▶";
+      els.play.setAttribute("aria-label", playing ? "暂停" : "播放");
+      els.play.title = playing ? "暂停" : "播放";
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: "guitar-mate-tab-playback", playing }, location.origin);
+      }
+    }
+
+    async function play() {
+      if (playing) {
+        pausePlayback();
+        return;
+      }
+      const resumeBeat = pausedBeat;
+      const parsed = parseScore({ reset: false });
+      if ((!parsed.events.length && !parsed.rests.length) || parsed.warnings.some(w => w.startsWith("缺少和弦") || w.includes("无法解析") || w.includes("没有找到"))) return;
+      pausedBeat = Math.min(resumeBeat, parsed.totalBeats);
+      if (pausedBeat >= parsed.totalBeats - .001) {
+        pausedBeat = 0;
+        playFullStartNext = true;
+      }
+      const firstPlayableBeat = parsed.events.find(event => event.technique !== "tie")?.beat ?? parsed.events[0]?.beat ?? 0;
+      if (pausedBeat < .001 && parsed.events.length && !playFullStartNext) pausedBeat = firstPlayableBeat;
+      playFullStartNext = false;
+      await scheduleFrom(pausedBeat, { countIn: els.countIn.checked });
+    }
+
+    function pausePlayback() {
+      if (!playing) return;
+      pausedBeat = currentBeat();
+      playing = false;
+      stopSources();
+      document.body.classList.remove("playing");
+      updatePlayButton();
+      cancelAnimationFrame(rafId);
+    }
+
+    function stopPlayback(fullStartNext = false) {
+      playing = false;
+      pausedBeat = 0;
+      playFullStartNext = fullStartNext;
+      stopSources();
+      document.body.classList.remove("playing");
+      updatePlayButton();
+      cancelAnimationFrame(rafId);
+      els.fill.style.width = "0%";
+      els.position.textContent = "00:00.0";
+      els.nowChord.textContent = "—";
+      els.nowNotes.textContent = "准备就绪";
+      setPlayheadPosition(0);
+    }
+
+    function changeBpm(value) {
+      const next = Math.max(40, Math.min(240, Number(value) || 60));
+      els.bpmNumber.value = next;
+      els.bpmRange.value = Math.min(180, next);
+      localStorage.setItem("guitar-tab-bpm", String(next));
+      els.bpmDisplay.textContent = String(next);
+      if (playing && score) {
+        const beat = currentBeat();
+        scheduleFrom(beat);
+      }
+      updateDuration();
+    }
+
+    function tabBlockForLine(lines, lineIndex) {
+      let blockStart = lineIndex;
+      while (blockStart >= 0 && !lines[blockStart].trimStart().startsWith("@")) blockStart -= 1;
+      if (blockStart < 0) return null;
+      let blockEnd = Math.min(lines.length - 1, blockStart + 6);
+      while (blockEnd + 1 < lines.length && lines[blockEnd + 1].trimStart().startsWith("%")) blockEnd += 1;
+      if (lineIndex < blockStart || lineIndex > blockEnd) return null;
+      return { blockStart, blockEnd };
+    }
+
+    function textLocationAtOffset(value, offset) {
+      const lines = value.split("\n");
+      let running = 0;
+      for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+        const lineEnd = running + lines[lineIndex].length;
+        if (offset <= lineEnd) return { lines, lineIndex, column: offset - running };
+        running = lineEnd + 1;
+      }
+      const lineIndex = Math.max(0, lines.length - 1);
+      return { lines, lineIndex, column: lines[lineIndex]?.length || 0 };
+    }
+
+    function tabBlockAtCaret() {
+      const value = els.tab.value;
+      const caret = els.tab.selectionStart;
+      const { lines, lineIndex, column } = textLocationAtOffset(value, caret);
+      const bounds = tabBlockForLine(lines, lineIndex);
+      return bounds ? { value, lines, lineIndex, column, ...bounds } : null;
+    }
+
+    function tabRowType(block, lineIndex = block?.lineIndex) {
+      if (!block || lineIndex == null) return "outside";
+      if (lineIndex === block.blockStart) return "chord";
+      if (lineIndex <= block.blockStart + 6) return "string";
+      if (lineIndex <= block.blockEnd) return "rhythm";
+      return "outside";
+    }
+
+    function tabRowFiller(block, lineIndex = block?.lineIndex) {
+      return tabRowType(block, lineIndex) === "string" ? "-" : " ";
+    }
+
+    function offsetForLineColumn(lines, lineIndex, column) {
+      let offset = 0;
+      for (let index = 0; index < lineIndex; index++) offset += lines[index].length + 1;
+      return offset + Math.min(column, lines[lineIndex]?.length || 0);
+    }
+
+    function commitTabLines(originalValue, lines, lineIndex, column) {
+      const nextValue = lines.join("\n");
+      els.tab.setRangeText(nextValue, 0, originalValue.length, "end");
+      const nextCaret = offsetForLineColumn(lines, lineIndex, column);
+      els.tab.setSelectionRange(nextCaret, nextCaret);
+      els.tab.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    function editTabColumn(mode, insertedChar = "-") {
+      const block = tabBlockAtCaret();
+      if (!block) return false;
+      const lines = [...block.lines];
+      for (let lineIndex = block.blockStart; lineIndex <= block.blockEnd; lineIndex++) {
+        const isStringRow = tabRowType(block, lineIndex) === "string";
+        const filler = tabRowFiller(block, lineIndex);
+        let line = lines[lineIndex].padEnd(block.column, filler);
+        if (mode === "insert") {
+          const char = isStringRow ? insertedChar : " ";
+          line = line.slice(0, block.column) + char + line.slice(block.column);
+        } else if (block.column < line.length) {
+          line = line.slice(0, block.column) + line.slice(block.column + 1);
+        }
+        lines[lineIndex] = line;
+      }
+      const nextColumn = mode === "insert" ? block.column + 1 : block.column;
+      commitTabLines(block.value, lines, block.lineIndex, nextColumn);
+      return true;
+    }
+
+    function insertTabColumnWithCurrentValue(char) {
+      const block = tabBlockAtCaret();
+      if (!block || tabRowType(block) === "chord") return false;
+      const lines = [...block.lines];
+      for (let lineIndex = block.blockStart; lineIndex <= block.blockEnd; lineIndex++) {
+        const filler = tabRowFiller(block, lineIndex);
+        const inserted = lineIndex === block.lineIndex ? char : filler;
+        const line = lines[lineIndex].padEnd(block.column, filler);
+        lines[lineIndex] = line.slice(0, block.column) + inserted + line.slice(block.column);
+      }
+      commitTabLines(block.value, lines, block.lineIndex, block.column + 1);
+      return true;
+    }
+
+    function clearTabCell(position, nextPosition, filler = "-") {
+      if (position < 0 || position >= els.tab.value.length || els.tab.value[position] === "\n") return false;
+      els.tab.setRangeText(filler, position, position + 1, "end");
+      els.tab.setSelectionRange(nextPosition, nextPosition);
+      els.tab.dispatchEvent(new Event("input", { bubbles: true }));
+      return true;
+    }
+
+    function clearLinearTabSelection(start, end) {
+      if (start >= end) return false;
+      const originalValue = els.tab.value;
+      const startLocation = textLocationAtOffset(originalValue, start);
+      const endLocation = textLocationAtOffset(originalValue, end);
+      const lines = [...startLocation.lines];
+      for (let lineIndex = startLocation.lineIndex; lineIndex <= endLocation.lineIndex; lineIndex++) {
+        const bounds = tabBlockForLine(lines, lineIndex);
+        if (!bounds) continue;
+        const block = { ...bounds, lineIndex };
+        const filler = tabRowFiller(block, lineIndex);
+        const from = lineIndex === startLocation.lineIndex ? startLocation.column : 0;
+        const to = lineIndex === endLocation.lineIndex ? endLocation.column : lines[lineIndex].length;
+        const chars = [...lines[lineIndex]];
+        for (let column = from; column < Math.min(to, chars.length); column++) {
+          if (chars[column] === "|" || (column === 0 && (chars[column] === "@" || chars[column] === "%"))) continue;
+          chars[column] = filler;
+        }
+        lines[lineIndex] = chars.join("");
+      }
+      commitTabLines(originalValue, lines, startLocation.lineIndex, startLocation.column);
+      return true;
+    }
+
+    let editorHistory = [];
+    let editorHistoryIndex = -1;
+    let restoringEditorHistory = false;
+    let columnSelection = null;
+    let lastColumnClipboard = null;
+    let compositionSnapshot = null;
+    let compositionTimer = null;
+
+    function recordEditorState() {
+      if (restoringEditorHistory) return;
+      const state = { value: els.tab.value, start: els.tab.selectionStart, end: els.tab.selectionEnd };
+      if (editorHistory[editorHistoryIndex]?.value === state.value) {
+        editorHistory[editorHistoryIndex] = state;
+        return;
+      }
+      editorHistory = editorHistory.slice(0, editorHistoryIndex + 1);
+      editorHistory.push(state);
+      if (editorHistory.length > 160) editorHistory.shift();
+      editorHistoryIndex = editorHistory.length - 1;
+    }
+
+    function resetEditorHistory() {
+      editorHistory = [];
+      editorHistoryIndex = -1;
+      recordEditorState();
+    }
+
+    function restoreEditorHistory(direction) {
+      const nextIndex = editorHistoryIndex + direction;
+      if (nextIndex < 0 || nextIndex >= editorHistory.length) return;
+      editorHistoryIndex = nextIndex;
+      const state = editorHistory[editorHistoryIndex];
+      restoringEditorHistory = true;
+      els.tab.value = state.value;
+      els.tab.setSelectionRange(state.start, state.end);
+      restoringEditorHistory = false;
+      clearColumnSelection();
+      parseScore();
+    }
+
+    function editorMetrics() {
+      const style = getComputedStyle(els.tab);
+      const canvas = editorMetrics.canvas || (editorMetrics.canvas = document.createElement("canvas"));
+      const context = canvas.getContext("2d");
+      context.font = style.font;
+      return {
+        charWidth: context.measureText("M").width,
+        lineHeight: parseFloat(style.lineHeight),
+        paddingLeft: parseFloat(style.paddingLeft),
+        paddingTop: parseFloat(style.paddingTop),
+      };
+    }
+
+    function textPointFromPointer(event) {
+      const lines = els.tab.value.split("\n");
+      const rect = els.tab.getBoundingClientRect();
+      const metrics = editorMetrics();
+      const line = Math.max(0, Math.min(lines.length - 1, Math.floor((event.clientY - rect.top + els.tab.scrollTop - metrics.paddingTop) / metrics.lineHeight)));
+      const column = Math.max(0, Math.min(lines[line].length, Math.round((event.clientX - rect.left + els.tab.scrollLeft - metrics.paddingLeft) / metrics.charWidth)));
+      return { line, column };
+    }
+
+    function normalizedColumnSelection() {
+      if (!columnSelection) return null;
+      return {
+        top: Math.min(columnSelection.startLine, columnSelection.endLine),
+        bottom: Math.max(columnSelection.startLine, columnSelection.endLine),
+        left: Math.min(columnSelection.startColumn, columnSelection.endColumn),
+        right: Math.max(columnSelection.startColumn, columnSelection.endColumn),
+      };
+    }
+
+    function renderColumnSelection() {
+      els.columnOverlay.innerHTML = "";
+      const selection = normalizedColumnSelection();
+      if (!selection || selection.right <= selection.left) return;
+      const metrics = editorMetrics();
+      for (let line = selection.top; line <= selection.bottom; line++) {
+        const cell = document.createElement("div");
+        cell.className = "column-selection-cell";
+        cell.style.left = `${metrics.paddingLeft + selection.left * metrics.charWidth - els.tab.scrollLeft}px`;
+        cell.style.top = `${metrics.paddingTop + line * metrics.lineHeight - els.tab.scrollTop}px`;
+        cell.style.width = `${(selection.right - selection.left) * metrics.charWidth}px`;
+        cell.style.height = `${metrics.lineHeight}px`;
+        els.columnOverlay.appendChild(cell);
+      }
+    }
+
+    function clearColumnSelection() {
+      columnSelection = null;
+      els.columnOverlay.innerHTML = "";
+    }
+
+    function columnSelectionText() {
+      const selection = normalizedColumnSelection();
+      if (!selection || selection.right <= selection.left) return "";
+      const lines = els.tab.value.split("\n");
+      return lines.slice(selection.top, selection.bottom + 1)
+        .map(line => line.slice(selection.left, selection.right).padEnd(selection.right - selection.left, " "))
+        .join("\n");
+    }
+
+    function pasteColumns(text, replaceSelection) {
+      const sourceRows = text.replace(/\r/g, "").split("\n");
+      const lines = els.tab.value.split("\n");
+      const sourceWidth = Math.max(0, ...sourceRows.map(row => row.length));
+      let top;
+      let left;
+      let bottom;
+      let replaceWidth;
+      if (replaceSelection) {
+        const selection = normalizedColumnSelection();
+        if (!selection) return false;
+        ({ top, bottom, left } = selection);
+        replaceWidth = selection.right - selection.left;
+      } else {
+        const caretOffset = els.tab.selectionStart;
+        const before = els.tab.value.slice(0, caretOffset).split("\n");
+        const caretLine = before.length - 1;
+        const bounds = tabBlockForLine(lines, caretLine);
+        if (!bounds) return false;
+        ({ blockStart: top, blockEnd: bottom } = bounds);
+        left = before.at(-1).length;
+        replaceWidth = sourceWidth;
+      }
+      const blockWidth = Math.max(...lines.slice(top + 1, Math.min(bottom + 1, top + 7)).map(line => line.length));
+      const writableWidth = Math.max(0, Math.min(replaceWidth, blockWidth - left));
+      if (!writableWidth) return false;
+      const targetCount = bottom - top + 1;
+      const targetBlock = { blockStart: top, blockEnd: bottom };
+      for (let rowIndex = 0; rowIndex < targetCount; rowIndex++) {
+        const lineIndex = top + rowIndex;
+        const filler = tabRowFiller(targetBlock, lineIndex);
+        const padded = lines[lineIndex].padEnd(blockWidth, filler);
+        const source = (sourceRows[rowIndex] ?? filler.repeat(sourceWidth)).padEnd(sourceWidth, filler).slice(0, writableWidth);
+        lines[lineIndex] = padded.slice(0, left) + source + padded.slice(left + writableWidth);
+      }
+      const nextValue = lines.join("\n");
+      els.tab.setRangeText(nextValue, 0, els.tab.value.length, "end");
+      const nextOffset = offsetForLineColumn(lines, top, left + writableWidth);
+      els.tab.setSelectionRange(nextOffset, nextOffset);
+      columnSelection = { startLine: top, endLine: bottom, startColumn: left, endColumn: left + writableWidth };
+      renderColumnSelection();
+      els.tab.dispatchEvent(new Event("input", { bubbles: true }));
+      return true;
+    }
+
+    let columnDragActive = false;
+    els.tab.addEventListener("pointerdown", event => {
+      if (!event.altKey) {
+        clearColumnSelection();
+        return;
+      }
+      event.preventDefault();
+      const point = textPointFromPointer(event);
+      const lines = els.tab.value.split("\n");
+      const bounds = tabBlockForLine(lines, point.line);
+      if (!bounds) return;
+      columnSelection = { startLine: bounds.blockStart, endLine: bounds.blockEnd, startColumn: point.column, endColumn: point.column };
+      columnDragActive = true;
+      els.tab.setPointerCapture?.(event.pointerId);
+      renderColumnSelection();
+    });
+    els.tab.addEventListener("pointermove", event => {
+      if (!columnDragActive) return;
+      const point = textPointFromPointer(event);
+      columnSelection.endColumn = point.column;
+      renderColumnSelection();
+    });
+    const finishColumnDrag = () => { columnDragActive = false; };
+    els.tab.addEventListener("pointerup", finishColumnDrag);
+    els.tab.addEventListener("pointercancel", finishColumnDrag);
+    els.tab.addEventListener("scroll", renderColumnSelection);
+
+    els.tab.addEventListener("copy", event => {
+      const text = columnSelectionText();
+      if (!text) return;
+      event.preventDefault();
+      event.clipboardData.setData("text/plain", text);
+      lastColumnClipboard = text;
+    });
+    els.tab.addEventListener("paste", event => {
+      const text = event.clipboardData.getData("text/plain");
+      const replaceSelection = Boolean(normalizedColumnSelection());
+      const isColumnPaste = replaceSelection || (lastColumnClipboard != null && text === lastColumnClipboard);
+      if (!isColumnPaste) return;
+      event.preventDefault();
+      pasteColumns(text, replaceSelection);
+    });
+    els.tab.addEventListener("beforeinput", event => {
+      if (event.inputType === "historyUndo" || event.inputType === "historyRedo") {
+        event.preventDefault();
+        restoreEditorHistory(event.inputType === "historyRedo" ? 1 : -1);
+        return;
+      }
+      if (event.inputType === "insertText" && event.data && normalizeCommittedAscii(event.data) !== event.data) {
+        event.preventDefault();
+        applyCommittedEditorText(event.data);
+      }
+    });
+    els.tab.addEventListener("compositionstart", () => {
+      clearTimeout(compositionTimer);
+      compositionSnapshot = {
+        value: els.tab.value,
+        start: els.tab.selectionStart,
+        end: els.tab.selectionEnd,
+      };
+    });
+    els.tab.addEventListener("compositionend", event => {
+      const committedText = event.data || "";
+      compositionTimer = setTimeout(() => {
+        if (!compositionSnapshot) return;
+        const snapshot = compositionSnapshot;
+        compositionSnapshot = null;
+        restoringEditorHistory = true;
+        els.tab.value = snapshot.value;
+        els.tab.setSelectionRange(snapshot.start, snapshot.end);
+        restoringEditorHistory = false;
+        applyCommittedEditorText(committedText);
+      }, 0);
+    });
+
+    function replaceTabCharacter(start, character) {
+      els.tab.setRangeText(character, start, start + 1, "end");
+      els.tab.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    function normalizeCommittedAscii(text) {
+      return [...text].map(character => {
+        const code = character.charCodeAt(0);
+        if (code >= 0xFF01 && code <= 0xFF5E) return String.fromCharCode(code - 0xFEE0);
+        return character === "　" ? " " : character;
+      }).join("");
+    }
+
+    function applyCommittedEditorText(rawText) {
+      const text = normalizeCommittedAscii(rawText);
+      for (const character of text) {
+        const start = els.tab.selectionStart;
+        if (start !== els.tab.selectionEnd) clearLinearTabSelection(start, els.tab.selectionEnd);
+        const caret = els.tab.selectionStart;
+        const block = tabBlockAtCaret();
+        const rowType = tabRowType(block);
+        const current = els.tab.value[caret];
+        if (current === "|" && rowType === "string") {
+          insertTabColumnWithCurrentValue(character);
+        } else if (current !== "\n") {
+          replaceTabCharacter(caret, character);
+        } else {
+          els.tab.setRangeText(character, caret, caret, "end");
+          els.tab.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+      }
+    }
+
+    function handleEditorHistoryKey(event) {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return false;
+      const key = event.key.toLowerCase();
+      if (key !== "z" && key !== "y") return false;
+      event.preventDefault();
+      restoreEditorHistory(key === "y" || event.shiftKey ? 1 : -1);
+      return true;
+    }
+
+    function createRhythmRowAtCaret(event, start) {
+      if (event.key !== "%") return false;
+      const beforeCaret = els.tab.value.slice(0, start).split("\n");
+      const lineIndex = beforeCaret.length - 1;
+      const lines = els.tab.value.split("\n");
+      if ((lines[lineIndex] || "").trim() !== "") return false;
+      let blockStart = lineIndex - 1;
+      while (blockStart >= 0 && !lines[blockStart].trimStart().startsWith("@")) blockStart -= 1;
+      const referenceWidth = lines[blockStart + 1]?.length || 0;
+      if (blockStart < 0 || lineIndex < blockStart + 7 || !referenceWidth) return false;
+      event.preventDefault();
+      lines[lineIndex] = `%${" ".repeat(Math.max(0, referenceWidth - 1))}`;
+      commitTabLines(els.tab.value, lines, lineIndex, 1);
+      return true;
+    }
+
+    function handleWholeColumnDelete(event, block, start) {
+      if (!event.shiftKey || (event.key !== "Backspace" && event.key !== "Delete") || !block) return false;
+      event.preventDefault();
+      if (event.key === "Backspace" && block.column > 0) {
+        els.tab.setSelectionRange(start - 1, start - 1);
+        editTabColumn("delete");
+      } else if (event.key === "Delete") {
+        editTabColumn("delete");
+      }
+      return true;
+    }
+
+    function handleDashInput(event, block, start) {
+      if (event.shiftKey || event.key !== "-" || !block) return false;
+      event.preventDefault();
+      if (tabRowType(block) === "rhythm") {
+        if (els.tab.value[start] === " ") replaceTabCharacter(start, "-");
+        else insertTabColumnWithCurrentValue("-");
+      } else {
+        editTabColumn("insert", "-");
+      }
+      return true;
+    }
+
+    function handleClearKey(event, block, start) {
+      if (!block || !["Backspace", "Delete", " "].includes(event.key)) return false;
+      const filler = tabRowFiller(block);
+      if (event.key === "Backspace") {
+        if (block.column <= 0) return false;
+        event.preventDefault();
+        if (els.tab.value[start - 1] === "|") {
+          els.tab.setSelectionRange(start - 1, start - 1);
+          editTabColumn("delete");
+        } else {
+          clearTabCell(start - 1, start - 1, filler);
+        }
+        return true;
+      }
+      event.preventDefault();
+      if (els.tab.value[start] === "|") {
+        editTabColumn("delete");
+        if (event.key === " ") {
+          const next = Math.min(els.tab.selectionStart + 1, els.tab.value.length);
+          els.tab.setSelectionRange(next, next);
+        }
+      } else {
+        clearTabCell(start, event.key === " " ? start + 1 : start, filler);
+      }
+      return true;
+    }
+
+    function handlePrintableTabInput(event, block, start) {
+      if (event.key.length !== 1 || !block) return false;
+      const character = normalizeCommittedAscii(event.key);
+      const rowType = tabRowType(block);
+      const current = els.tab.value[start];
+      if (character === "|") {
+        event.preventDefault();
+        editTabColumn("insert", "|");
+        return true;
+      }
+      if (current === "|" && rowType === "string") {
+        event.preventDefault();
+        insertTabColumnWithCurrentValue(character);
+        return true;
+      }
+      if (current !== "\n") {
+        event.preventDefault();
+        replaceTabCharacter(start, character);
+        return true;
+      }
+      return false;
+    }
+
+    els.tab.addEventListener("keydown", event => {
+      if (handleEditorHistoryKey(event)) return;
+      if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+      const start = els.tab.selectionStart;
+      if (start !== els.tab.selectionEnd) {
+        if (["Backspace", "Delete", " "].includes(event.key)) {
+          event.preventDefault();
+          clearLinearTabSelection(start, els.tab.selectionEnd);
+        }
+        return;
+      }
+      if (createRhythmRowAtCaret(event, start)) return;
+      const block = tabBlockAtCaret();
+      if (handleWholeColumnDelete(event, block, start)) return;
+      if (handleDashInput(event, block, start)) return;
+      if (handleClearKey(event, block, start)) return;
+      handlePrintableTabInput(event, block, start);
+    });
+
+    const SCORE_LIBRARY_KEY = "guitar-tab-player-library-v1";
+    let scoreLibrary = [];
+    let currentLibraryId = null;
+
+    function readScoreLibrary() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(SCORE_LIBRARY_KEY) || "[]");
+        return Array.isArray(parsed) ? parsed.filter(item => item && typeof item.tab === "string") : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function writeScoreLibrary() {
+      localStorage.setItem(SCORE_LIBRARY_KEY, JSON.stringify(scoreLibrary));
+    }
+
+    function makeScoreId() {
+      return crypto.randomUUID?.() || `score-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
+
+    function captureScoreDocument({
+      id = currentLibraryId || makeScoreId(),
+      name = els.scoreName.value.trim(),
+      artist = els.scoreArtist.value.trim(),
+    } = {}) {
+      return {
+        id,
+        name,
+        artist,
+        key: els.key.value || "G",
+        tab: els.tab.value,
+        shapes: els.shapes.value,
+        bpm: Number(els.bpmNumber.value) || 60,
+        beats: els.beats.value,
+        layout: els.layout.value,
+        tone: els.tone.value,
+        capo: els.capo.value,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    function renderScoreLibrary() {
+      const ordered = [...scoreLibrary].sort((a, b) =>
+        PINYIN_COLLATOR.compare(String(a.artist || ""), String(b.artist || ""))
+        || PINYIN_COLLATOR.compare(String(a.name || ""), String(b.name || "")),
+      );
+      els.librarySelect.innerHTML = `<option value="">当前未保存谱面</option>${ordered
+        .map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(scoreDisplayName(item))}</option>`)
+        .join("")}`;
+      els.librarySelect.value = currentLibraryId || "";
+      els.deleteScore.disabled = !currentLibraryId;
+      renderLibraryList(els.librarySearch.value);
+      syncCompactControls();
+    }
+
+    function renderLibraryList(query = "") {
+      const normalizedQuery = String(query).trim().toLocaleLowerCase("zh-CN");
+      const ordered = [...scoreLibrary]
+        .filter(item => !normalizedQuery || `${item.artist || ""} ${item.name || ""}`.toLocaleLowerCase("zh-CN").includes(normalizedQuery))
+        .sort((a, b) =>
+          PINYIN_COLLATOR.compare(String(a.artist || ""), String(b.artist || ""))
+          || PINYIN_COLLATOR.compare(String(a.name || ""), String(b.name || "")),
+        );
+      els.libraryList.innerHTML = ordered.length
+        ? ordered.map(item => `<button type="button" data-score-id="${escapeHtml(item.id)}" class="${item.id === currentLibraryId ? "selected" : ""}"><strong>${escapeHtml(item.name || "未命名谱面")}</strong><span>${escapeHtml(item.artist || "未知歌手")} · ${escapeHtml(item.key || "G")}调 · ${escapeHtml(item.beats === "6/8" ? "6/8" : "4/4")}</span></button>`).join("")
+        : `<p class="library-empty">${scoreLibrary.length ? "没有找到匹配的谱面" : "本地谱库还是空的"}</p>`;
+    }
+
+    function loadScoreDocument(document, { select = true } = {}) {
+      if (!document || typeof document.tab !== "string") return false;
+      stopPlayback();
+      els.tab.value = document.tab;
+      els.shapes.value = typeof document.shapes === "string" ? document.shapes : "";
+      els.scoreName.value = document.name || "";
+      els.scoreArtist.value = document.artist || "";
+      els.key.value = KEY_OPTIONS.includes(document.key) ? document.key : "G";
+      changeBpm(document.bpm || 60);
+      els.beats.value = document.beats === "6/8" ? "6/8" : "4/4";
+      if (document.layout) els.layout.value = document.layout;
+      els.tone.value = "acoustic";
+      if (document.capo != null) els.capo.value = String(Math.max(-1, Math.min(6, Number(document.capo) || 0)));
+      loadedBank = null;
+      sampleBuffers.clear();
+      currentLibraryId = select ? document.id || null : null;
+      clearColumnSelection();
+      resetEditorHistory();
+      renderScoreLibrary();
+      renderOptionButtons();
+      syncCompactControls();
+      parseScore();
+      return true;
+    }
+
+    function saveCurrentScore() {
+      els.saveNameField.value = els.scoreName.value;
+      els.saveArtistField.value = els.scoreArtist.value;
+      els.saveScoreDialog.showModal();
+      requestAnimationFrame(() => els.saveNameField.focus());
+    }
+
+    function commitCurrentScore() {
+      const name = els.saveNameField.value.trim();
+      const artist = els.saveArtistField.value.trim();
+      if (!name) return false;
+      els.scoreName.value = name;
+      els.scoreArtist.value = artist;
+      const existing = scoreLibrary.find(item => item.id === currentLibraryId)
+        || scoreLibrary.find(item => item.name === name && String(item.artist || "") === artist);
+      const document = captureScoreDocument({ id: existing?.id || makeScoreId(), name, artist });
+      const index = scoreLibrary.findIndex(item => item.id === document.id);
+      if (index >= 0) scoreLibrary[index] = document;
+      else scoreLibrary.push(document);
+      currentLibraryId = document.id;
+      writeScoreLibrary();
+      renderScoreLibrary();
+      els.message.textContent = `“${scoreDisplayName(document)}”已保存到本地谱库。`;
+      els.message.classList.remove("error");
+      return true;
+    }
+
+    function exportCurrentScore() {
+      const name = els.scoreName.value.trim() || "未命名谱面";
+      const scoreDocument = captureScoreDocument({ name });
+      const payload = { format: "guitar-tab-player", version: 1, scores: [scoreDocument] };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${name.replace(/[\\/:*?"<>|]/g, "-")}.吉他谱.json`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    async function importScoreFile(file) {
+      try {
+        const parsed = JSON.parse(await file.text());
+        const candidates = Array.isArray(parsed?.scores) ? parsed.scores : [parsed];
+        const valid = candidates.filter(item => item && typeof item.tab === "string");
+        if (!valid.length) throw new Error("文件中没有可识别的谱面");
+        const reservedNames = new Set(scoreLibrary.map(item => item.name));
+        const imported = valid.map(item => {
+          let name = String(item.name || "导入的谱面").trim() || "导入的谱面";
+          if (reservedNames.has(name)) {
+            let index = 2;
+            while (reservedNames.has(`${name}（导入 ${index}）`)) index += 1;
+            name = `${name}（导入 ${index}）`;
+          }
+          reservedNames.add(name);
+          return {
+            id: makeScoreId(),
+            name,
+            artist: String(item.artist || "").trim(),
+            key: KEY_OPTIONS.includes(item.key) ? item.key : "G",
+            tab: item.tab,
+            shapes: typeof item.shapes === "string" ? item.shapes : "",
+            bpm: Math.max(40, Math.min(240, Number(item.bpm) || 60)),
+            beats: item.beats === "6/8" ? "6/8" : "4/4",
+            layout: item.layout === "timed" ? "timed" : "compact",
+            tone: "acoustic",
+            capo: String(Math.max(-1, Math.min(6, Number(item.capo) || 0))),
+            updatedAt: new Date().toISOString(),
+          };
+        });
+        scoreLibrary.push(...imported);
+        writeScoreLibrary();
+        loadScoreDocument(imported[0]);
+        els.message.textContent = `已导入 ${imported.length} 首谱面并保存到本地谱库。`;
+        els.message.classList.remove("error");
+      } catch (error) {
+        els.message.textContent = `导入失败：${error.message || "文件格式不正确"}。`;
+        els.message.classList.add("error");
+      } finally {
+        els.importScoreInput.value = "";
+      }
+    }
+
+    els.play.addEventListener("click", play);
+    els.replay.addEventListener("click", () => stopPlayback(true));
+    els.saveScore.addEventListener("click", saveCurrentScore);
+    els.deleteScore.addEventListener("click", () => {
+      const score = scoreLibrary.find(item => item.id === currentLibraryId);
+      if (!score || !confirm(`确定从本地谱库删除“${score.name}”吗？此操作无法撤销。`)) return;
+      scoreLibrary = scoreLibrary.filter(item => item.id !== currentLibraryId);
+      writeScoreLibrary();
+      currentLibraryId = null;
+      renderScoreLibrary();
+      els.message.textContent = `“${score.name}”已从本地谱库删除，当前编辑内容仍然保留。`;
+      els.message.classList.remove("error");
+    });
+    els.librarySelect.addEventListener("change", () => {
+      const selected = scoreLibrary.find(item => item.id === els.librarySelect.value);
+      if (selected) loadScoreDocument(selected);
+      else {
+        currentLibraryId = null;
+        els.deleteScore.disabled = true;
+      }
+    });
+    els.importScore.addEventListener("click", () => els.importScoreInput.click());
+    els.importScoreInput.addEventListener("change", () => {
+      const file = els.importScoreInput.files?.[0];
+      if (file) importScoreFile(file);
+    });
+    els.exportScore.addEventListener("click", exportCurrentScore);
+    els.openLibrary.addEventListener("click", () => {
+      els.librarySearch.value = "";
+      renderLibraryList();
+      els.libraryDialog.showModal();
+    });
+    els.librarySearch.addEventListener("input", () => renderLibraryList(els.librarySearch.value));
+    els.libraryList.addEventListener("click", event => {
+      const button = event.target.closest("[data-score-id]");
+      if (!button) return;
+      const selected = scoreLibrary.find(item => item.id === button.dataset.scoreId);
+      if (selected) {
+        loadScoreDocument(selected);
+        els.libraryDialog.close();
+      }
+    });
+    els.saveScoreForm.addEventListener("submit", event => {
+      if (event.submitter?.value !== "confirm") return;
+      event.preventDefault();
+      if (commitCurrentScore()) els.saveScoreDialog.close();
+    });
+    els.openScoreConfig.addEventListener("click", () => {
+      renderOptionButtons();
+      els.countInSheet.checked = els.countIn.checked;
+      els.loopSheet.checked = els.loop.checked;
+      els.scoreConfigDialog.showModal();
+    });
+    els.keyChoiceGrid.addEventListener("click", event => {
+      const button = event.target.closest("[data-key]");
+      if (button) applyScoreMetadata({ key: button.dataset.key });
+    });
+    els.capoChoiceGrid.addEventListener("click", event => {
+      const button = event.target.closest("[data-capo]");
+      if (button) applyScoreMetadata({ capo: button.dataset.capo });
+    });
+    els.meterChoiceGrid.addEventListener("click", event => {
+      const button = event.target.closest("[data-meter]");
+      if (button) applyScoreMetadata({ meter: button.dataset.meter });
+    });
+    els.resetKey.addEventListener("click", () => applyScoreMetadata({ key: "G" }));
+    els.resetCapo.addEventListener("click", () => applyScoreMetadata({ capo: "0" }));
+    els.countInSheet.addEventListener("change", () => {
+      els.countIn.checked = els.countInSheet.checked;
+      localStorage.setItem("guitar-tab-count-in", els.countIn.checked ? "1" : "0");
+    });
+    els.loopSheet.addEventListener("change", () => {
+      els.loop.checked = els.loopSheet.checked;
+      localStorage.setItem("guitar-tab-loop", els.loop.checked ? "1" : "0");
+    });
+    els.openBpm.addEventListener("click", () => {
+      els.bpmDialogRange.value = getBpm();
+      els.bpmDialogValue.textContent = getBpm();
+      els.countInSheet.checked = els.countIn.checked;
+      els.loopSheet.checked = els.loop.checked;
+      els.bpmDialog.showModal();
+    });
+    els.bpmDialogRange.addEventListener("input", () => {
+      changeBpm(els.bpmDialogRange.value);
+      els.bpmDialogValue.textContent = getBpm();
+      syncCompactControls();
+    });
+    els.resetBpm.addEventListener("click", () => {
+      changeBpm(60);
+      els.bpmDialogRange.value = 60;
+      els.bpmDialogValue.textContent = 60;
+      syncCompactControls();
+    });
+    els.openLayout.addEventListener("click", () => {
+      renderOptionButtons();
+      els.layoutDialog.showModal();
+    });
+    els.layoutChoiceList.addEventListener("click", event => {
+      const button = event.target.closest("[data-layout]");
+      if (!button) return;
+      els.layout.value = button.dataset.layout;
+      localStorage.setItem("guitar-tab-layout", els.layout.value);
+      renderOptionButtons();
+      syncCompactControls();
+      renderScore();
+      updateSummary();
+    });
+    els.toggleEditor.addEventListener("click", () => {
+      const willOpen = els.editorWorkspace.hidden;
+      els.editorWorkspace.hidden = !willOpen;
+      els.toggleEditor.textContent = willOpen ? "收起编辑区" : "编辑谱面与和弦";
+    });
+    els.numbersToX.addEventListener("click", () => {
+      const shapes = parseShapes(els.shapes.value).shapes;
+      applyTabTextConversion(convertChordFingeringNumbersToX(els.tab.value, shapes), "品位转 x 完成");
+    });
+    els.xToNumbers.addEventListener("click", () => {
+      const shapes = parseShapes(els.shapes.value).shapes;
+      applyTabTextConversion(convertChordXToFingeringNumbers(els.tab.value, shapes), "x 转品位完成");
+    });
+    els.validate.addEventListener("click", () => {
+      const caret = els.tab.selectionStart;
+      const normalized = normalizeTabPadding(els.tab.value);
+      const rhythmResult = canonicalizeRhythmLayers(normalized);
+      const validated = rhythmResult.text;
+      if (validated !== els.tab.value) {
+        els.tab.setRangeText(validated, 0, els.tab.value.length, "end");
+        const nextCaret = Math.min(caret, validated.length);
+        els.tab.setSelectionRange(nextCaret, nextCaret);
+        els.tab.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      parseScore();
+      if (rhythmResult.changedBlocks) {
+        const details = [];
+        if (rhythmResult.changedBlocks) details.push(`重新分层 ${rhythmResult.changedBlocks} 个含附点的节奏区块`);
+        els.message.textContent = `内容校验完成：${details.join("；")}。`;
+        els.message.classList.remove("error");
+      }
+    });
+    els.split.addEventListener("click", () => applyTabReflow(2, "每行两小节分行"));
+    els.merge.addEventListener("click", () => applyTabReflow(Infinity, "全部小节合并"));
+    els.bpmRange.addEventListener("input", event => changeBpm(event.target.value));
+    els.bpmNumber.addEventListener("change", event => changeBpm(event.target.value));
+    els.beats.addEventListener("change", () => {
+      localStorage.setItem("guitar-tab-meter", els.beats.value);
+      syncCompactControls();
+      parseScore();
+    });
+    let autoParseTimer = null;
+    const scheduleAutoParse = () => {
+      clearTimeout(autoParseTimer);
+      autoParseTimer = setTimeout(() => parseScore(), 260);
+    };
+    els.tab.addEventListener("input", () => {
+      if (compositionSnapshot) return;
+      recordEditorState();
+      scheduleAutoParse();
+    });
+    els.shapes.addEventListener("input", scheduleAutoParse);
+    els.layout.addEventListener("change", () => {
+      localStorage.setItem("guitar-tab-layout", els.layout.value);
+      syncCompactControls();
+      renderScore();
+      updateSummary();
+    });
+    let resizeTimer = null;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        if (!score) return;
+        renderScore();
+        tick();
+      }, 120);
+    });
+    els.tone.addEventListener("change", async () => {
+      const wasPlaying = playing;
+      const beat = currentBeat();
+      if (wasPlaying) pausePlayback();
+      loadedBank = null;
+      sampleBuffers.clear();
+      await loadSampleBank(els.tone.value);
+      if (wasPlaying) scheduleFrom(beat);
+    });
+    els.capo.addEventListener("change", () => {
+      localStorage.setItem("guitar-tab-capo", els.capo.value);
+      syncCompactControls();
+      updateSummary();
+      updateNowPlaying(currentBeat());
+      if (playing && score) scheduleFrom(currentBeat());
+    });
+    els.progress.addEventListener("click", event => {
+      if (!score) return;
+      const rect = els.progress.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+      pausedBeat = ratio * score.totalBeats;
+      if (playing) scheduleFrom(pausedBeat); else tick();
+    });
+    els.scoreSvg.addEventListener("click", event => {
+      if (!score || !renderedScoreSystems.length) return;
+      const rect = els.scoreSvg.getBoundingClientRect();
+      const viewBox = els.scoreSvg.viewBox.baseVal;
+      const svgX = (event.clientX - rect.left) / rect.width * viewBox.width;
+      const svgY = (event.clientY - rect.top) / rect.height * viewBox.height;
+      const system = renderedScoreSystems.find(item => svgY >= item.stringTop - 18 && svgY < item.stringTop - 18 + item.renderHeight)
+        || renderedScoreSystems[renderedScoreSystems.length - 1];
+      const layout = buildSystemLayout(system, scoreRenderMetrics.x0, scoreRenderMetrics.x1);
+      let low = system.startBeat;
+      let high = system.startBeat + system.duration;
+      for (let index = 0; index < 28; index++) {
+        const middle = (low + high) / 2;
+        const middleX = scoreXForBeat(system, middle, scoreRenderMetrics.x0, scoreRenderMetrics.x1, layout);
+        if (middleX < svgX) low = middle;
+        else high = middle;
+      }
+      pausedBeat = Math.max(system.startBeat, Math.min(system.startBeat + system.duration, (low + high) / 2));
+      if (playing) scheduleFrom(pausedBeat);
+      else tick();
+    });
+    els.countIn.addEventListener("change", () => localStorage.setItem("guitar-tab-count-in", els.countIn.checked ? "1" : "0"));
+    els.loop.addEventListener("change", () => localStorage.setItem("guitar-tab-loop", els.loop.checked ? "1" : "0"));
+
+    window.addEventListener("message", event => {
+      if (event.source !== window.parent || event.origin !== location.origin) return;
+      if (event.data?.type === "guitar-mate-tab-toggle-playback") void play();
+      if (event.data?.type === "guitar-mate-tab-stop") stopPlayback();
+      if (event.data?.type === "guitar-mate-tab-latency") hostLatencyMs = Math.max(-500, Math.min(1000, Number(event.data.value) || 0));
+    });
+
+    els.tab.value = SAMPLE_TAB;
+    els.shapes.value = SAMPLE_SHAPES;
+    resetEditorHistory();
+    scoreLibrary = readScoreLibrary();
+    els.key.value = KEY_OPTIONS.includes(localStorage.getItem("guitar-tab-key")) ? localStorage.getItem("guitar-tab-key") : "G";
+    els.countIn.checked = localStorage.getItem("guitar-tab-count-in") !== "0";
+    els.loop.checked = localStorage.getItem("guitar-tab-loop") === "1";
+    els.capo.value = String(Math.max(-1, Math.min(6, Number(localStorage.getItem("guitar-tab-capo")) || 0)));
+    els.beats.value = localStorage.getItem("guitar-tab-meter") === "6/8" ? "6/8" : "4/4";
+    els.layout.value = localStorage.getItem("guitar-tab-layout") === "timed" ? "timed" : "compact";
+    changeBpm(localStorage.getItem("guitar-tab-bpm") || 60);
+    renderScoreLibrary();
+    renderOptionButtons();
+    syncCompactControls();
+    updatePlayButton();
+    parseScore();
+    if (window.parent !== window) window.parent.postMessage({ type: "guitar-mate-tab-ready" }, location.origin);
+  </script>
+</body>
+</html>
