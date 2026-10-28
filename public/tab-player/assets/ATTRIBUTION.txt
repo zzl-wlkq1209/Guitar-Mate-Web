@@ -1,0 +1,9 @@
+Guitar samples
+==============
+
+Acoustic and nylon guitar samples are from the tonejs-instruments collection:
+https://github.com/nbrosowsky/tonejs-instruments
+
+The samples are licensed under Creative Commons Attribution 3.0 (CC BY 3.0).
+See the upstream repository's sample-source-info.txt for the original sample sources.
+

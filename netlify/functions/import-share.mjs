@@ -9,7 +9,9 @@ export default async (request) => {
     if (typeof token !== "string" || !/^[a-f0-9]{32}$/i.test(token)) {
       return json(400, { error: "分享口令格式不正确。" });
     }
-    const response = await supabase(`share_tokens?token=eq.${token}&select=payload,expires_at`, { method: "GET" });
+    const response = await supabase(`share_tokens?token=eq.${token}&select=payload,expires_at`, {
+      method: "GET",
+    });
     const rows = await response.json();
     const record = Array.isArray(rows) ? rows[0] : null;
     if (!response.ok || !record || new Date(record.expires_at).getTime() <= Date.now()) {

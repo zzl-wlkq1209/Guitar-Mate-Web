@@ -1,5 +1,6 @@
 import {
   Check,
+  ChevronDown,
   Download,
   Eraser,
   List,
@@ -16,12 +17,19 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import { Directory, Encoding, Filesystem } from "@capacitor/filesystem";
+import { Clipboard } from "@capacitor/clipboard";
+import { Capacitor } from "@capacitor/core";
+import { Share } from "@capacitor/share";
+import { StatusBar, Style } from "@capacitor/status-bar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { shareApiUrl } from "./shareApi";
+import TabPlayerFrame, { type TabPlayerFrameHandle } from "./TabPlayerFrame";
 
 type Direction = "down" | "up";
 type SlotMode = "empty" | "normal" | "mute" | "double";
 type MeterId = "fourFour" | "sixEight";
+type ToolId = "strum" | "tab";
 
 type StrumSlot = {
   mode: SlotMode;
@@ -92,7 +100,45 @@ type StoredState = {
 
 type InitialState = StoredState;
 
+type TabScoreDocument = {
+  id?: string;
+  name?: string;
+  artist?: string;
+  key?: string;
+  tab: string;
+  shapes?: string;
+  bpm?: number;
+  beats?: string;
+  layout?: string;
+  tone?: string;
+  capo?: string;
+  updatedAt?: string;
+};
+
+type GlobalBackup = {
+  kind: "guitar-mate-backup";
+  version: 1;
+  exportedAt: string;
+  activeTool: ToolId;
+  strum: StoredState;
+  tabPlayer: {
+    library: TabScoreDocument[];
+    preferences: Record<string, string>;
+  };
+};
+
 const STORAGE_KEY = "guitar-strum-simulator-v5";
+const ACTIVE_TOOL_KEY = "guitar-mate-active-tool-v1";
+const TAB_LIBRARY_KEY = "guitar-tab-player-library-v1";
+const TAB_PREFERENCE_KEYS = [
+  "guitar-tab-count-in",
+  "guitar-tab-loop",
+  "guitar-tab-capo",
+  "guitar-tab-key",
+  "guitar-tab-meter",
+  "guitar-tab-bpm",
+  "guitar-tab-layout",
+] as const;
 const LEGACY_STORAGE_KEYS = [
   "guitar-strum-simulator-v4",
   "guitar-strum-simulator-v3",
@@ -324,6 +370,25 @@ const defaultInitialState = (): InitialState => ({
   },
 });
 
+const readActiveTool = (): ToolId => {
+  if (typeof window === "undefined") return "strum";
+  return window.localStorage.getItem(ACTIVE_TOOL_KEY) === "tab" ? "tab" : "strum";
+};
+
+const readTabLibrary = (): TabScoreDocument[] => {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(TAB_LIBRARY_KEY) ?? "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is TabScoreDocument => Boolean(item && typeof item.tab === "string"))
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const makeTabScoreId = () =>
+  crypto.randomUUID?.() ?? `score-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
 const readInitialState = (): InitialState => {
   if (typeof window === "undefined") {
     return defaultInitialState();
@@ -516,6 +581,11 @@ const getNextSlot = (
 
 export default function App() {
   const [initialState] = useState(readInitialState);
+  const [activeTool, setActiveTool] = useState<ToolId>(readActiveTool);
+  const [toolMenuOpen, setToolMenuOpen] = useState(false);
+  const [tabPlayerRevision, setTabPlayerRevision] = useState(0);
+  const [tabPlayerPlaying, setTabPlayerPlaying] = useState(false);
+  const tabPlayerRef = useRef<TabPlayerFrameHandle | null>(null);
   const initialWorkspace = initialState.workspaces[initialState.activeMeter];
   const [bpm, setBpm] = useState(initialState.bpm);
   const [bpmInput, setBpmInput] = useState(String(initialState.bpm));
@@ -594,6 +664,17 @@ export default function App() {
     savedPatterns,
     loopItems,
     loopEnabled,
+  });
+  const currentStoredState = (): StoredState => ({
+    bpm,
+    activeMeter,
+    latencyMs,
+    fontSize,
+    darkMode,
+    workspaces: {
+      ...workspacesRef.current,
+      [activeMeter]: currentWorkspace(),
+    },
   });
 
   const getLoopSource = useCallback(
@@ -698,6 +779,10 @@ export default function App() {
   }, [activeMeter]);
 
   useEffect(() => {
+    window.localStorage.setItem(ACTIVE_TOOL_KEY, activeTool);
+  }, [activeTool]);
+
+  useEffect(() => {
     loopItemsRef.current = loopItems;
     if (loopItems.length === 0 && loopEnabled) {
       setLoopEnabled(false);
@@ -724,6 +809,13 @@ export default function App() {
     field.style.height = "auto";
     field.style.height = `${field.scrollHeight}px`;
   }, [shareCopyFallback]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    void StatusBar.setOverlaysWebView({ overlay: false });
+    void StatusBar.setBackgroundColor({ color: darkMode ? "#18181A" : "#FBFEFD" });
+    void StatusBar.setStyle({ style: darkMode ? Style.Dark : Style.Light });
+  }, [darkMode]);
 
   useEffect(() => {
     // Apply the display preference at the document root so rem-based controls scale together.
@@ -1429,10 +1521,9 @@ export default function App() {
     return { addedPatterns, skippedPatterns, importedLoopItems };
   };
 
-  const exportPattern = () => {
-    const payload = createSharePayload();
+  const exportTimestamp = () => {
     const now = new Date();
-    const timestamp = [
+    return [
       now.getFullYear(),
       String(now.getMonth() + 1).padStart(2, "0"),
       String(now.getDate()).padStart(2, "0"),
@@ -1440,14 +1531,187 @@ export default function App() {
       String(now.getMinutes()).padStart(2, "0"),
       String(now.getSeconds()).padStart(2, "0"),
     ].join("");
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `strum-backup-${timestamp}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
   };
+
+  const saveJsonFile = async (filename: string, payload: unknown, title: string) => {
+    const data = JSON.stringify(payload, null, 2);
+
+    try {
+      const file = await Filesystem.writeFile({
+        path: `guitar-mate-backups/${filename}`,
+        data,
+        directory: Directory.Cache,
+        encoding: Encoding.UTF8,
+        recursive: true,
+      });
+      await Share.share({
+        title,
+        text: filename,
+        url: file.uri,
+        dialogTitle: title,
+      });
+    } catch {
+      const blob = new Blob([data], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const exportPattern = async () => {
+    await saveJsonFile(
+      `strum-library-${exportTimestamp()}.json`,
+      createSharePayload(),
+      "导出扫弦资料库",
+    );
+  };
+
+  const exportTabLibrary = async () => {
+    await saveJsonFile(
+      `guitar-tabs-${exportTimestamp()}.json`,
+      { format: "guitar-tab-player", version: 1, scores: readTabLibrary() },
+      "导出吉他谱资料库",
+    );
+  };
+
+  const exportGlobalBackup = async () => {
+    const preferences = TAB_PREFERENCE_KEYS.reduce<Record<string, string>>((result, key) => {
+      const value = window.localStorage.getItem(key);
+      if (value !== null) result[key] = value;
+      return result;
+    }, {});
+    const payload: GlobalBackup = {
+      kind: "guitar-mate-backup",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      activeTool,
+      strum: currentStoredState(),
+      tabPlayer: {
+        library: readTabLibrary(),
+        preferences,
+      },
+    };
+    await saveJsonFile(
+      `guitar-mate-full-${exportTimestamp()}.json`,
+      payload,
+      "导出 Guitar Mate 完整备份",
+    );
+  };
+
+  const mergeTabLibrary = (candidates: TabScoreDocument[]) => {
+    const current = readTabLibrary();
+    const names = new Set(current.map((score) => score.name).filter(Boolean));
+    let added = 0;
+    let skipped = 0;
+    const next = [...current];
+
+    candidates.forEach((candidate) => {
+      if (!candidate || typeof candidate.tab !== "string") return;
+      const duplicate = next.some(
+        (score) => score.tab === candidate.tab && (score.shapes ?? "") === (candidate.shapes ?? ""),
+      );
+      if (duplicate) {
+        skipped += 1;
+        return;
+      }
+      const baseName = String(candidate.name || "导入的谱面").trim() || "导入的谱面";
+      let name = baseName;
+      let suffix = 2;
+      while (names.has(name)) {
+        name = `${baseName}（导入 ${suffix}）`;
+        suffix += 1;
+      }
+      names.add(name);
+      next.push({
+        ...candidate,
+        id: makeTabScoreId(),
+        name,
+        artist: String(candidate.artist ?? "").trim(),
+        key: String(candidate.key ?? "G"),
+        bpm: Math.max(40, Math.min(240, Number(candidate.bpm) || 60)),
+        beats: candidate.beats === "6/8" ? "6/8" : "4/4",
+        layout: candidate.layout === "timed" ? "timed" : "compact",
+        tone: "acoustic",
+        capo: String(Math.max(-1, Math.min(6, Number(candidate.capo) || 0))),
+        updatedAt: new Date().toISOString(),
+      });
+      added += 1;
+    });
+
+    window.localStorage.setItem(TAB_LIBRARY_KEY, JSON.stringify(next));
+    if (added > 0) setTabPlayerRevision((revision) => revision + 1);
+    return { added, skipped };
+  };
+
+  const importTransferFile = async (file: File) => {
+    setShareStatus(null);
+    try {
+      const parsed = JSON.parse(await file.text()) as Partial<GlobalBackup> & {
+        format?: string;
+        scores?: TabScoreDocument[];
+        tab?: string;
+        slots?: StrumSlot[];
+        name?: string;
+        advancedMode?: boolean;
+      };
+
+      if (parsed.kind === "guitar-mate-backup" && parsed.strum?.workspaces && parsed.tabPlayer) {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed.strum));
+        window.localStorage.setItem(TAB_LIBRARY_KEY, JSON.stringify(parsed.tabPlayer.library ?? []));
+        TAB_PREFERENCE_KEYS.forEach((key) => {
+          const value = parsed.tabPlayer?.preferences?.[key];
+          if (typeof value === "string") window.localStorage.setItem(key, value);
+          else window.localStorage.removeItem(key);
+        });
+        window.localStorage.setItem(ACTIVE_TOOL_KEY, parsed.activeTool === "tab" ? "tab" : "strum");
+        window.location.reload();
+        return;
+      }
+
+      const tabCandidates = Array.isArray(parsed.scores)
+        ? parsed.scores
+        : typeof parsed.tab === "string"
+          ? [parsed as TabScoreDocument]
+          : [];
+      if (parsed.format === "guitar-tab-player" || tabCandidates.length > 0) {
+        const result = mergeTabLibrary(tabCandidates);
+        setShareStatus(
+          result.added > 0
+            ? `已导入 ${result.added} 首吉他谱${result.skipped ? `，跳过 ${result.skipped} 首重复内容` : ""}。`
+            : "没有导入新谱面，文件内容与本地资料库重复。",
+        );
+        return;
+      }
+
+      const sharedResult = importSharedPayload(parsed as Partial<SharedPayload>);
+      if (sharedResult) {
+        setShareStatus(
+          sharedResult.addedPatterns > 0
+            ? `已导入 ${sharedResult.addedPatterns} 个扫弦节奏型。`
+            : "没有导入新节奏型，文件内容与本地资料库重复。",
+        );
+        return;
+      }
+
+      if (parsed.slots?.length === slotCount) {
+        stop();
+        setSelectedId("custom");
+        setCustomName(parsed.name ?? "导入扫弦");
+        setAdvancedMode(Boolean(parsed.advancedMode));
+        setSlots(normalizeSlots(parsed.slots, slotCount, true));
+        setShareStatus("已导入当前扫弦节奏型。");
+        return;
+      }
+
+      throw new Error("文件中没有可识别的 Guitar Mate 数据");
+    } catch (error) {
+      setShareStatus(error instanceof Error ? `导入失败：${error.message}。` : "导入失败：文件格式不正确。");
+    }
+  };
+
   const importPattern = async (file: File) => {
     try {
       const parsed = JSON.parse(await file.text()) as Partial<StoredState> & {
@@ -1494,7 +1758,9 @@ export default function App() {
       const message = `这是来自「Guitar Mate」的扫弦配置分享，30分钟内有效。复制这条消息后，打开左上角设置 -> 导入配置 -> 从分享口令导入。分享口令为「${result.token}」`;
       setShareCode(result.token);
       try {
-        if (navigator.clipboard?.writeText) {
+        if (Capacitor.isNativePlatform()) {
+          await Clipboard.write({ string: message });
+        } else if (navigator.clipboard?.writeText) {
           await navigator.clipboard.writeText(message);
         } else {
           const field = document.createElement("textarea");
@@ -1511,6 +1777,17 @@ export default function App() {
       } catch {
         setShareCopyFallback(message);
         setShareStatus("分享口令已生成，请长按上方文字复制。");
+        if (Capacitor.isNativePlatform()) {
+          try {
+            await Share.share({
+              title: "扫弦配置分享",
+              text: message,
+              dialogTitle: "分享扫弦配置",
+            });
+          } catch {
+            // The selectable text remains available when the system share sheet is unavailable.
+          }
+        }
       }
     } catch (error) {
       setShareStatus(error instanceof Error && /[\u4e00-\u9fff]/.test(error.message) ? error.message : "网络连接失败，请检查网络后重试。");
@@ -1554,7 +1831,12 @@ export default function App() {
   };
 
   const startCalibration = async () => {
-    stop();
+    if (activeTool === "tab") {
+      tabPlayerRef.current?.stop();
+      setTabPlayerPlaying(false);
+    } else {
+      stop();
+    }
     stopCalibration();
     const context = await ensureAudioContext();
     calibrationClicksRef.current = [];
@@ -1671,6 +1953,23 @@ export default function App() {
     window.location.reload();
   };
 
+  const switchTool = (tool: ToolId) => {
+    if (tool === activeTool) {
+      setToolMenuOpen(false);
+      return;
+    }
+    if (activeTool === "tab") {
+      tabPlayerRef.current?.stop();
+      setTabPlayerPlaying(false);
+    } else {
+      stop();
+    }
+    stopCalibration();
+    setCalibrationOpen(false);
+    setToolMenuOpen(false);
+    setActiveTool(tool);
+  };
+
   const customSelected = isCustomId(selectedId);
   const lockedSlots =
     meterConfig.lockedIds.has(selectedId) ||
@@ -1691,7 +1990,7 @@ export default function App() {
   }, [calibrationOpen, clearConfirmOpen, customEditorOpen, loopEditorOpen, settingsOpen, transferDialog]);
 
   return (
-    <main className={["app-shell", darkMode ? "dark-mode" : ""].join(" ")} data-font-size={fontSize}>
+    <main className={["app-shell", `tool-${activeTool}`, darkMode ? "dark-mode" : ""].join(" ")} data-font-size={fontSize}>
       <section className="topbar">
         <button
           className="settings-toggle"
@@ -1702,9 +2001,35 @@ export default function App() {
         >
           <Settings size={21} />
         </button>
-        <div className="title-trigger">
-          <p>STRUMMING MATE</p>
-          <h1>扫弦跟练器</h1>
+        <div className="tool-switcher">
+          <button
+            className="title-trigger"
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={toolMenuOpen}
+            onClick={() => setToolMenuOpen((open) => !open)}
+          >
+            <p>{activeTool === "strum" ? "STRUMMING MATE" : "TAB PLAYER"}</p>
+            <span className="title-line">
+              <h1>{activeTool === "strum" ? "扫弦跟练器" : "吉他谱播放器"}</h1>
+              <ChevronDown className={toolMenuOpen ? "open" : ""} size={19} />
+            </span>
+          </button>
+          {toolMenuOpen ? (
+            <>
+              <button className="tool-menu-scrim" type="button" aria-label="关闭功能菜单" onClick={() => setToolMenuOpen(false)} />
+              <div className="tool-menu" role="menu" aria-label="切换功能">
+                <button className={activeTool === "strum" ? "selected" : ""} type="button" role="menuitem" onClick={() => switchTool("strum")}>
+                  <strong>扫弦跟练器</strong>
+                  <span>节奏型、跟拍与循环练习</span>
+                </button>
+                <button className={activeTool === "tab" ? "selected" : ""} type="button" role="menuitem" onClick={() => switchTool("tab")}>
+                  <strong>吉他谱播放器</strong>
+                  <span>六线谱解析、试听与本地谱库</span>
+                </button>
+              </div>
+            </>
+          ) : null}
         </div>
         <div className="top-actions">
           <button
@@ -1712,9 +2037,7 @@ export default function App() {
             type="button"
             onClick={() => {
               setCalibrationOpen((open) => {
-                if (open) {
-                  stopCalibration();
-                }
+                if (open) stopCalibration();
                 return !open;
               });
             }}
@@ -1725,11 +2048,15 @@ export default function App() {
           <button
             className="play-button"
             type="button"
-            aria-label={isPlaying ? "暂停" : "播放"}
-            title={isPlaying ? "暂停" : "播放"}
-            onClick={togglePlayback}
+            aria-label={(activeTool === "strum" ? isPlaying : tabPlayerPlaying) ? "暂停" : "播放"}
+            title={(activeTool === "strum" ? isPlaying : tabPlayerPlaying) ? "暂停" : "播放"}
+            onClick={() => {
+              stopCalibration();
+              if (activeTool === "strum") void togglePlayback();
+              else tabPlayerRef.current?.togglePlayback();
+            }}
           >
-            {isPlaying ? <Pause size={22} /> : <Play size={22} />}
+            {(activeTool === "strum" ? isPlaying : tabPlayerPlaying) ? <Pause size={22} /> : <Play size={22} />}
           </button>
         </div>
       </section>
@@ -1744,7 +2071,7 @@ export default function App() {
             <div className="floating-header">
               <div>
                 <strong>设置</strong>
-                <span>调整练习时的阅读体验</span>
+                <span>两个功能共用外观和数据管理</span>
               </div>
             </div>
             <div className="settings-row">
@@ -1782,7 +2109,7 @@ export default function App() {
               </button>
             </div>
             <div className="settings-row settings-actions-row">
-              <strong>配置</strong>
+              <strong>数据与分享</strong>
               <div className="settings-actions">
                 <button className="settings-clear" type="button" title="清空配置" aria-label="清空配置" onClick={() => setClearConfirmOpen(true)}>
                   <Eraser size={19} />
@@ -1821,53 +2148,83 @@ export default function App() {
             <div className="floating-header">
               <div>
                 <strong>{transferDialog === "import" ? "导入配置" : "导出配置"}</strong>
-                <span>选择备份文件或分享口令</span>
+                <span>{transferDialog === "import" ? "自动识别完整备份、资料库或单项文件" : "按需要选择分享范围"}</span>
               </div>
             </div>
             {transferDialog === "import" ? (
               <div className="transfer-options">
-                <label className="transfer-option">
-                  <Download size={20} />
-                  <span>从备份文件导入</span>
+                <label className="transfer-choice">
+                  <span className="transfer-choice-icon"><Download size={20} /></span>
+                  <span>
+                    <strong>选择本地文件</strong>
+                    <small>支持完整备份、扫弦资料库和吉他谱文件</small>
+                  </span>
                   <input
                     type="file"
-                    accept="application/json"
+                    accept="application/json,.json"
                     onChange={(event) => {
                       const file = event.target.files?.[0];
-                      if (file) {
-                        void importPattern(file);
-                        setTransferDialog(null);
-                      }
+                      if (file) void importTransferFile(file);
                       event.currentTarget.value = "";
                     }}
                   />
                 </label>
-                <div className="share-code-entry">
-                  <input
-                    value={shareCode}
-                    onChange={(event) => setShareCode(event.target.value)}
-                    placeholder="粘贴分享口令"
-                    aria-label="分享口令"
-                  />
-                  <button type="button" disabled={!shareCode.trim() || shareBusy} onClick={() => void importShareCode()}>
-                    {shareBusy ? "导入中..." : "从分享口令导入"}
-                  </button>
-                </div>
+                {activeTool === "strum" ? (
+                  <>
+                    <div className="transfer-divider"><span>扫弦在线临时分享</span></div>
+                    <div className="share-code-entry">
+                      <input
+                        value={shareCode}
+                        onChange={(event) => setShareCode(event.target.value)}
+                        placeholder="粘贴分享口令"
+                        aria-label="分享口令"
+                      />
+                      <button type="button" disabled={!shareCode.trim() || shareBusy} onClick={() => void importShareCode()}>
+                        {shareBusy ? "导入中..." : "导入口令"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="transfer-local-note">吉他谱仅通过本地文件交换，不会上传到线上。</p>
+                )}
                 {shareStatus ? <p className="share-status">{shareStatus}</p> : null}
               </div>
             ) : (
               <div className="transfer-options">
-                <button className="transfer-option" type="button" onClick={() => {
-                  void exportPattern();
+                <button className="transfer-choice" type="button" onClick={() => {
+                  void exportGlobalBackup();
                   setTransferDialog(null);
                 }}>
-                  <Upload size={20} />
-                  <span>导出备份文件</span>
+                  <span className="transfer-choice-icon"><Upload size={20} /></span>
+                  <span>
+                    <strong>完整备份</strong>
+                    <small>扫弦设置、节奏型、循环列表和全部本地吉他谱</small>
+                  </span>
                 </button>
-                <button className="transfer-option" type="button" disabled={shareBusy} onClick={() => void createShareCode()}>
-                  <Reply className="share-forward-icon" size={22} />
-                  <span>{shareBusy ? "生成中..." : "生成分享口令"}</span>
+                <button className="transfer-choice" type="button" onClick={() => {
+                  void (activeTool === "strum" ? exportPattern() : exportTabLibrary());
+                  setTransferDialog(null);
+                }}>
+                  <span className="transfer-choice-icon"><Upload size={20} /></span>
+                  <span>
+                    <strong>{activeTool === "strum" ? "仅导出扫弦资料库" : "仅导出吉他谱资料库"}</strong>
+                    <small>{activeTool === "strum" ? "适合分享节奏型与循环列表" : "包含所有已保存谱面，仍只写入本地文件"}</small>
+                  </span>
                 </button>
+                {activeTool === "strum" ? (
+                  <>
+                    <div className="transfer-divider"><span>在线临时分享</span></div>
+                    <button className="transfer-choice compact" type="button" disabled={shareBusy} onClick={() => void createShareCode()}>
+                      <span className="transfer-choice-icon"><Reply className="share-forward-icon" size={22} /></span>
+                      <span>
+                        <strong>{shareBusy ? "生成中..." : "生成扫弦分享口令"}</strong>
+                        <small>仅包含扫弦资料，30 分钟后失效</small>
+                      </span>
+                    </button>
+                  </>
+                ) : (
+                  <p className="transfer-local-note">当前吉他谱功能不提供在线口令，避免谱面内容离开设备。</p>
+                )}
                 {shareCopyFallback ? (
                   <textarea
                     className="share-code-display"
@@ -1896,7 +2253,7 @@ export default function App() {
             <div className="floating-header">
               <div>
                 <strong>初始化配置？</strong>
-                <span>将清除所有本地数据并恢复默认状态。</span>
+                <span>将清除扫弦设置和本地吉他谱，并恢复默认状态。</span>
               </div>
             </div>
             <div className="confirmation-actions">
@@ -1967,6 +2324,8 @@ export default function App() {
         </div>
       ) : null}
 
+      {activeTool === "strum" ? (
+      <>
       <section className="controls" aria-label="速度和分享">
         <label className="bpm-control">
           <span>BPM</span>
@@ -2365,6 +2724,17 @@ export default function App() {
       </div>
       ) : null}
       </section>
+      </>
+      ) : (
+        <TabPlayerFrame
+          ref={tabPlayerRef}
+          darkMode={darkMode}
+          fontSize={fontSize}
+          latencyMs={latencyMs}
+          revision={tabPlayerRevision}
+          onPlaybackChange={setTabPlayerPlaying}
+        />
+      )}
     </main>
   );
 }
