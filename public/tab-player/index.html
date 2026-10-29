@@ -240,7 +240,7 @@
       overscroll-behavior: auto;
       touch-action: pan-x pan-y;
     }
-    body.playing .score-scroll { touch-action: none; }
+    body.playing.auto-scroll .score-scroll { touch-action: none; }
     #scoreSvg {
       display: block;
       width: 100%;
@@ -723,9 +723,9 @@
 
     .current-score-button {
       display: block;
-      max-width: min(46vw, 360px);
+      max-width: 100%;
       min-width: 0;
-      flex: 0 1 auto;
+      flex: 1 1 auto;
       padding: 7px 4px;
       border: 0;
       background: transparent;
@@ -733,7 +733,11 @@
       text-align: left;
     }
 
-    .current-score-button strong { display: block; overflow: hidden; font-size: calc(15px * var(--host-font-scale)); line-height: 1.2; white-space: nowrap; text-overflow: ellipsis; }
+    .current-score-button strong { display: block; min-width: 0; font-size: calc(15px * var(--host-font-scale)); line-height: 1.2; white-space: nowrap; }
+    .current-score-button strong.wrap-title { white-space: normal; }
+    .current-score-button strong.wrap-title .score-title-separator { display: none; }
+    .current-score-button strong.wrap-title .score-name-part,
+    .current-score-button strong.wrap-title .score-artist-part { display: block; }
     .current-score-cluster, .score-save-actions { display: flex; min-width: 0; align-items: center; gap: 4px; }
     .current-score-cluster { flex: 1 1 auto; overflow: hidden; }
     .score-name-part, .score-artist-part { min-width: 0; }
@@ -946,6 +950,17 @@
     .copy-code-button, .mobile-editor-tool { display: grid; place-items: center; width: 28px; height: 28px; padding: 5px; border: 0; border-radius: 6px; background: transparent; color: #e5b354; }
     .copy-code-button svg, .mobile-editor-tool svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
     .copy-code-button:hover, .mobile-editor-tool:hover { color: #f4ca70; background: color-mix(in srgb, #e5b354 12%, transparent); }
+    .copy-code-button.copied { animation: copyGlow 1.35s ease-out; }
+    @keyframes copyGlow {
+      0% { color: #fff5d7; background: rgba(229,179,84,.34); box-shadow: 0 0 0 1px rgba(229,179,84,.7), 0 0 18px rgba(229,179,84,.7) !important; }
+      100% { color: #e5b354; background: transparent; box-shadow: 0 0 0 0 rgba(229,179,84,0), 0 0 0 rgba(229,179,84,0) !important; }
+    }
+    .scroll-mode-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; padding: 8px 12px 8px 28px; border-radius: 10px; background: color-mix(in srgb, var(--panel-2) 72%, transparent); }
+    .scroll-mode-row[hidden] { display: none; }
+    .scroll-mode-row strong { color: var(--muted); font-size: calc(12px * var(--host-font-scale)); }
+    .scroll-mode-toggle { display: grid; grid-template-columns: repeat(2, 30px); padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); }
+    .scroll-mode-toggle button { min-height: 26px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: var(--lime); font-weight: 850; }
+    .scroll-mode-toggle button.selected { background: var(--lime-dark); color: #fff; }
     .mobile-editor-tool { display: none; }
     .mobile-editor-tool:disabled { color: var(--muted); opacity: .38; }
     #validateButton { border-color: var(--lime); background: var(--lime-dark); color: #fff; }
@@ -1024,7 +1039,7 @@
       .tab-command-bar button { padding: 8px 11px; }
       .tab-command-bar strong { font-size: 15px; }
       .score-actions-bar { margin-top: 7px; }
-      .current-score-button { max-width: min(42vw, 250px); }
+      .current-score-button { max-width: 100%; }
       .current-score-button strong { font-size: clamp(12px, 3.6vw, calc(15px * var(--host-font-scale))); }
       .score-actions-bar .ghost-button { padding: 0 8px; }
       .score-panel { margin-top: 7px; }
@@ -1041,8 +1056,7 @@
     }
 
     @media (max-width: 350px) {
-      .current-score-button { max-width: 34vw; }
-      .current-score-button strong { white-space: normal; }
+      .current-score-button { max-width: 100%; }
       .score-title-separator { display: none; }
       .score-artist-part { display: block; }
     }
@@ -1182,8 +1196,8 @@
           <div class="head-actions">
             <button class="ghost-button" id="splitButton" type="button">分行</button>
             <button class="ghost-button" id="mergeButton" type="button">合并</button>
-            <button class="ghost-button" id="numbersToXButton" type="button">品位→x</button>
-            <button class="ghost-button" id="xToNumbersButton" type="button">x→品位</button>
+            <button class="ghost-button" id="numbersToXButton" type="button">转x</button>
+            <button class="ghost-button" id="xToNumbersButton" type="button">转品位</button>
             <button class="primary-button" id="validateButton" type="button">内容校验</button>
           </div>
         </div>
@@ -1274,6 +1288,8 @@
         </div>
         <label class="dialog-switch-row"><span><strong>准备音</strong><small>播放前提示三拍</small></span><input id="countInSheetToggle" type="checkbox"></label>
         <label class="dialog-switch-row"><span><strong>自动反复</strong><small>播完后从头继续</small></span><input id="loopSheetToggle" type="checkbox"></label>
+        <label class="dialog-switch-row"><span><strong>滚动播放</strong><small>播放时自动跟随当前谱面</small></span><input id="autoScrollToggle" type="checkbox" checked></label>
+        <div class="scroll-mode-row" id="scrollModeRow"><strong>滚动模式</strong><div class="scroll-mode-toggle" id="scrollModeToggle"><button type="button" data-scroll-mode="smooth" class="selected">匀</button><button type="button" data-scroll-mode="jump">跳</button></div></div>
         <label class="dialog-switch-row"><span><strong>分节训练</strong><small>点选起止小节，再点已选范围可取消</small></span><input id="sectionPracticeToggle" type="checkbox"></label>
         <p class="dialog-help" id="sectionPracticeHint" hidden>先点一小节即可单独练习，再点另一小节选择两者之间的范围；自动反复开启时重复所选范围。</p>
       </form>
@@ -1344,7 +1360,7 @@
         <div class="dialog-help">
           <div><strong>谱面结构</strong><br><code>@</code> 开始一个谱段，下面依次写 1 至 6 弦；<code>|</code> 是小节线。和弦指形在右侧“和弦指形”中按 <code>和弦名=六位指形</code> 逐行填写。</div>
           <div><strong>节奏</strong><br>第一条 <code>%</code> 行：空位为四分音符，<code>-</code> 为八分，<code>=</code> 为十六分，<code>.</code> 为附点。需要 32 分音符时，在第二条 <code>%</code> 行同列补 <code>-</code>。</div>
-          <div><strong>演奏符号</strong><br><code>/</code>、<code>\</code> 滑音；<code>u/d</code> 上/下扫弦；<code>w/W</code> 正/反向琶音；<code>R/r</code> 休止；独立或紧跟音符的 <code>=</code> 补满本小节剩余时值。</div>
+          <div><strong>演奏符号</strong><br><code>/</code>、<code>\</code> 滑音；<code>*</code> 表示只显示动作但不发音，可写在滑音、延音的终点；<code>u/d</code> 上/下扫弦、<code>w/W</code> 正/反向琶音，必须写在所拨音符左侧一列才会生效；<code>R/r</code> 休止；独立或紧跟音符的 <code>=</code> 补满本小节剩余时值。</div>
           <div><strong>三连音</strong><br>三个音用 <code>~</code> 连写，并在第二条节奏行末音下方写 <code>33</code>，按原总时值均分。</div>
           <div><strong>快捷编辑</strong><br>输入 <code>-</code> 插入整列，输入 <code>|</code> 插入小节。<br><code>Shift + Backspace</code> 删除光标前一整列；<code>Shift + Delete</code> 删除光标所在整列。<br>按住 <code>Alt</code> 横向拖动可选择整列；<code>Ctrl / ⌘ + Z</code> 撤销，<code>Ctrl / ⌘ + Shift + Z</code> 重做。“分行/合并”用于调整长谱排版。</div>
         </div>
@@ -1417,6 +1433,9 @@ Gsus2=300233`;
       countIn: document.querySelector("#countInToggle"),
       sectionPractice: document.querySelector("#sectionPracticeToggle"),
       sectionPracticeHint: document.querySelector("#sectionPracticeHint"),
+      autoScroll: document.querySelector("#autoScrollToggle"),
+      scrollModeRow: document.querySelector("#scrollModeRow"),
+      scrollModeToggle: document.querySelector("#scrollModeToggle"),
       loop: document.querySelector("#loopToggle"),
       scoreSvg: document.querySelector("#scoreSvg"),
       scoreHint: document.querySelector("#scoreHint"),
@@ -1576,6 +1595,20 @@ Gsus2=300233`;
         artistPart.textContent = artist;
         els.currentScoreLabel.append(separator, artistPart);
       }
+      requestAnimationFrame(fitCurrentScoreLabel);
+    }
+
+    function fitCurrentScoreLabel() {
+      const label = els.currentScoreLabel;
+      if (!label?.clientWidth) return;
+      label.classList.remove("wrap-title");
+      let size = 15;
+      label.style.fontSize = `${size}px`;
+      while (size > 12 && label.scrollWidth > label.clientWidth) {
+        size -= .5;
+        label.style.fontSize = `${size}px`;
+      }
+      label.classList.toggle("wrap-title", label.scrollWidth > label.clientWidth);
     }
 
     function syncCompactControls() {
@@ -2169,6 +2202,7 @@ Gsus2=300233`;
       let blocks = 0;
       let maxFret = 0;
       const systems = [];
+      const measureColumnWidths = [];
 
       for (let i = 0; i < lines.length; i++) {
         if (!lines[i].trimStart().startsWith("@")) continue;
@@ -2307,6 +2341,7 @@ Gsus2=300233`;
         for (let measureIndex = 0; measureIndex < sourceMeasureCount; measureIndex++) {
           const leftBar = bars[measureIndex];
           const rightBar = bars[measureIndex + 1];
+          measureColumnWidths.push(Math.max(1, rightBar - leftBar));
           const measureColumns = onsetColumns.filter(column => column > leftBar && column < rightBar);
           const measureInfos = measureColumns.map(column => {
             const rest = restsByColumn.get(column);
@@ -2455,7 +2490,7 @@ Gsus2=300233`;
       if (!events.length && !rests.length) dedupedWarnings.push("没有解析到音符或休止符。");
 
       const measures = totalBeats / beatsPerMeasure;
-      score = { events, rests, silentEvents, totalBeats, measures, maxFret, usedChords: [...usedChords], shapes: shapeResult.shapes, warnings: dedupedWarnings, timingIssues, systems, beatsPerMeasure, meterLabel };
+      score = { events, rests, silentEvents, totalBeats, measures, maxFret, usedChords: [...usedChords], shapes: shapeResult.shapes, warnings: dedupedWarnings, timingIssues, systems, measureColumnWidths, beatsPerMeasure, meterLabel };
       if (practiceRange && practiceRange[1] >= Math.ceil(measures)) clearPracticeRange();
       updateSummary();
       renderScore();
@@ -2566,25 +2601,44 @@ Gsus2=300233`;
       return beat >= system.startBeat - .0001 && (beat < endBeat - .0001 || (isLast && beat <= endBeat + .0001));
     }
 
-    function measuresPerScoreLine() {
-      if (window.innerWidth <= 900) return els.layout.value === "timed" ? 1 : 2;
-      return 3;
+    function scoreLineMeasureGroups(measureCount) {
+      if (window.innerWidth > 900) {
+        const groups = [];
+        for (let first = 0; first < measureCount; first += 3) groups.push({ first, count: Math.min(3, measureCount - first) });
+        return groups;
+      }
+      if (els.layout.value === "timed") return Array.from({ length: measureCount }, (_, first) => ({ first, count: 1 }));
+      const groups = [];
+      let first = 0;
+      while (first < measureCount) {
+        let count = 0;
+        let columns = 0;
+        while (first + count < measureCount) {
+          const measureColumns = Math.max(1, score.measureColumnWidths?.[first + count] || 25);
+          if (count > 0 && columns + measureColumns > 25) break;
+          columns += measureColumns;
+          count += 1;
+          if (columns >= 25) break;
+        }
+        groups.push({ first, count: Math.max(1, count) });
+        first += Math.max(1, count);
+      }
+      return groups;
     }
 
     function buildDisplaySystems() {
-      const measuresPerLine = measuresPerScoreLine();
       const measureCount = Math.max(1, Math.ceil(score.totalBeats / score.beatsPerMeasure));
       const allMarkers = score.systems.flatMap(system => system.markers).sort((a, b) => a.beat - b.beat);
       const displaySystems = [];
-      for (let firstMeasure = 0; firstMeasure < measureCount; firstMeasure += measuresPerLine) {
+      scoreLineMeasureGroups(measureCount).forEach(({ first: firstMeasure, count }) => {
         const startBeat = firstMeasure * score.beatsPerMeasure;
-        const duration = Math.min(measuresPerLine * score.beatsPerMeasure, score.totalBeats - startBeat);
+        const duration = Math.min(count * score.beatsPerMeasure, score.totalBeats - startBeat);
         const endBeat = startBeat + duration;
         const activeMarker = [...allMarkers].reverse().find(marker => marker.beat <= startBeat + .0001);
         const markers = allMarkers.filter(marker => marker.beat > startBeat + .0001 && marker.beat < endBeat - .0001);
         if (activeMarker) markers.unshift({ ...activeMarker, beat: startBeat });
         displaySystems.push({ index: displaySystems.length, measureNumber: firstMeasure + 1, startBeat, duration, markers });
-      }
+      });
       return displaySystems;
     }
 
@@ -2931,7 +2985,7 @@ Gsus2=300233`;
 
     function preparePlaybackAutoScroll(beat) {
       playbackScrollState = null;
-      if (!score || !renderedScoreSystems.length) return;
+      if (!els.autoScroll.checked || !score || !renderedScoreSystems.length) return;
       const container = activeScoreScrollContainer();
       if (!container) return;
       const documentMode = container === document.scrollingElement;
@@ -2960,6 +3014,9 @@ Gsus2=300233`;
       playbackScrollState = {
         container,
         documentMode,
+        mode: localStorage.getItem("guitar-tab-scroll-mode") === "jump" ? "jump" : "smooth",
+        currentSystemIndex: renderedScoreSystems.indexOf(currentSystem),
+        reserveRows: window.innerWidth <= 900 ? 2 : 1,
         startBeat: rowEndBeat,
         endBeat,
         startScroll: initialTarget,
@@ -2970,7 +3027,28 @@ Gsus2=300233`;
 
     function updatePlaybackAutoScroll(beat) {
       const state = playbackScrollState;
-      if (!state || performance.now() < state.holdUntil || beat < state.startBeat) return;
+      if (!state || performance.now() < state.holdUntil) return;
+      if (state.mode === "jump") {
+        const current = renderedScoreSystems.find(system => beatBelongsToSystem(beat, system));
+        if (!current) return;
+        const currentIndex = renderedScoreSystems.indexOf(current);
+        if (currentIndex === state.currentSystemIndex) return;
+        state.currentSystemIndex = currentIndex;
+        const reserveIndex = Math.min(renderedScoreSystems.length - 1, currentIndex + state.reserveRows);
+        const reserveSystem = renderedScoreSystems[reserveIndex];
+        const viewportHeight = state.documentMode ? window.innerHeight : state.container.clientHeight;
+        const svgRect = els.scoreSvg.getBoundingClientRect();
+        const svgScale = svgRect.height / Math.max(1, els.scoreSvg.viewBox.baseVal.height || svgRect.height);
+        const reserveBottom = scoreSystemScrollOffset(reserveSystem, state.container) + reserveSystem.renderHeight * svgScale;
+        const maxScroll = Math.max(0, state.container.scrollHeight - viewportHeight);
+        const target = Math.max(0, Math.min(maxScroll, reserveBottom - viewportHeight + 16));
+        if (target > state.container.scrollTop + 2) {
+          if (state.documentMode) window.scrollTo({ top: target, behavior: "smooth" });
+          else state.container.scrollTo({ top: target, behavior: "smooth" });
+        }
+        return;
+      }
+      if (beat < state.startBeat) return;
       const span = Math.max(.0001, state.endBeat - state.startBeat);
       const ratio = Math.max(0, Math.min(1, (beat - state.startBeat) / span));
       const next = state.startScroll + (state.endScroll - state.startScroll) * ratio;
@@ -3209,6 +3287,7 @@ Gsus2=300233`;
 
       playing = true;
       document.body.classList.add("playing");
+      document.body.classList.toggle("auto-scroll", els.autoScroll.checked);
       if (typeof preparePlaybackAutoScroll === "function") preparePlaybackAutoScroll(beat);
       updatePlayButton();
       cancelAnimationFrame(rafId);
@@ -3236,6 +3315,7 @@ Gsus2=300233`;
         stopSources();
         playing = false;
         document.body.classList.remove("playing");
+        document.body.classList.remove("auto-scroll");
         updatePlayButton();
         if (els.loop.checked) {
           pausedBeat = bounds.start;
@@ -3300,6 +3380,7 @@ Gsus2=300233`;
       playbackScrollState = null;
       stopSources();
       document.body.classList.remove("playing");
+      document.body.classList.remove("auto-scroll");
       updatePlayButton();
       cancelAnimationFrame(rafId);
     }
@@ -3312,6 +3393,7 @@ Gsus2=300233`;
       playFullStartNext = fullStartNext;
       stopSources();
       document.body.classList.remove("playing");
+      document.body.classList.remove("auto-scroll");
       updatePlayButton();
       cancelAnimationFrame(rafId);
       els.fill.style.width = "0%";
@@ -3938,6 +4020,7 @@ Gsus2=300233`;
       isScoreDirty = Boolean(document && currentSavedFingerprint && scoreFingerprint(document) !== currentSavedFingerprint);
       els.saveScore.classList.toggle("dirty", isScoreDirty);
       els.saveScore.textContent = isScoreDirty ? "保存修改" : "保存";
+      requestAnimationFrame(fitCurrentScoreLabel);
       if (window.parent !== window) window.parent.postMessage({ type: "guitar-mate-tab-dirty", dirty: isScoreDirty }, location.origin);
     }
 
@@ -4209,6 +4292,9 @@ Gsus2=300233`;
       }
       els.copyTab.dataset.tooltip = "已复制";
       els.copyTab.setAttribute("aria-label", "已复制");
+      els.copyTab.classList.remove("copied");
+      void els.copyTab.offsetWidth;
+      els.copyTab.classList.add("copied");
       setTimeout(() => { els.copyTab.dataset.tooltip = "复制"; els.copyTab.setAttribute("aria-label", "复制谱面文本"); }, 1200);
     }
 
@@ -4481,6 +4567,19 @@ Gsus2=300233`;
       els.loop.checked = els.loopSheet.checked;
       localStorage.setItem("guitar-tab-loop", els.loop.checked ? "1" : "0");
     });
+    els.autoScroll.addEventListener("change", () => {
+      localStorage.setItem("guitar-tab-auto-scroll", els.autoScroll.checked ? "1" : "0");
+      els.scrollModeRow.hidden = !els.autoScroll.checked;
+      document.body.classList.toggle("auto-scroll", playing && els.autoScroll.checked);
+      if (!els.autoScroll.checked) playbackScrollState = null;
+      else if (playing) preparePlaybackAutoScroll(currentBeat());
+    });
+    els.scrollModeToggle.addEventListener("click", event => {
+      const button = event.target.closest("[data-scroll-mode]");
+      if (!button) return;
+      localStorage.setItem("guitar-tab-scroll-mode", button.dataset.scrollMode);
+      els.scrollModeToggle.querySelectorAll("[data-scroll-mode]").forEach(item => item.classList.toggle("selected", item === button));
+    });
     els.sectionPractice.addEventListener("change", () => {
       stopPlayback();
       clearPracticeRange();
@@ -4492,6 +4591,7 @@ Gsus2=300233`;
       els.bpmDialogValue.textContent = getBpm();
       els.countInSheet.checked = els.countIn.checked;
       els.loopSheet.checked = els.loop.checked;
+      els.scrollModeRow.hidden = !els.autoScroll.checked;
       els.bpmDialog.showModal();
     });
     els.bpmDialogRange.addEventListener("input", () => {
@@ -4677,12 +4777,12 @@ Gsus2=300233`;
     });
     const scoreScroller = els.scoreSvg.closest(".score-scroll");
     scoreScroller?.addEventListener("wheel", event => {
-      if (!playing || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+      if (!playing || !els.autoScroll.checked || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
       event.preventDefault();
       window.scrollBy({ top: event.deltaY, left: 0, behavior: "auto" });
     }, { passive: false });
     scoreScroller?.addEventListener("touchmove", event => {
-      if (playing) event.preventDefault();
+      if (playing && els.autoScroll.checked) event.preventDefault();
     }, { passive: false });
     els.countIn.addEventListener("change", () => localStorage.setItem("guitar-tab-count-in", els.countIn.checked ? "1" : "0"));
     els.loop.addEventListener("change", () => localStorage.setItem("guitar-tab-loop", els.loop.checked ? "1" : "0"));
@@ -4695,6 +4795,9 @@ Gsus2=300233`;
 
     const dialogObserver = new MutationObserver(syncDialogScrollLock);
     document.querySelectorAll(".player-dialog").forEach(dialog => dialogObserver.observe(dialog, { attributes: true, attributeFilter: ["open"] }));
+    const titleResizeObserver = new ResizeObserver(() => fitCurrentScoreLabel());
+    titleResizeObserver.observe(els.currentScoreLabel);
+    window.addEventListener("resize", fitCurrentScoreLabel);
 
     document.querySelectorAll(".player-dialog").forEach(dialog => {
       dialog.addEventListener("click", event => {
@@ -4793,6 +4896,10 @@ Gsus2=300233`;
     els.key.value = KEY_OPTIONS.includes(localStorage.getItem("guitar-tab-key")) ? localStorage.getItem("guitar-tab-key") : "G";
     els.countIn.checked = localStorage.getItem("guitar-tab-count-in") !== "0";
     els.loop.checked = localStorage.getItem("guitar-tab-loop") !== "0";
+    els.autoScroll.checked = localStorage.getItem("guitar-tab-auto-scroll") !== "0";
+    els.scrollModeRow.hidden = !els.autoScroll.checked;
+    const savedScrollMode = localStorage.getItem("guitar-tab-scroll-mode") === "jump" ? "jump" : "smooth";
+    els.scrollModeToggle.querySelectorAll("[data-scroll-mode]").forEach(button => button.classList.toggle("selected", button.dataset.scrollMode === savedScrollMode));
     els.capo.value = String(Math.max(-1, Math.min(6, Number(localStorage.getItem("guitar-tab-capo")) || 0)));
     els.beats.value = localStorage.getItem("guitar-tab-meter") === "6/8" ? "6/8" : "4/4";
     els.layout.value = localStorage.getItem("guitar-tab-layout") === "timed" ? "timed" : "compact";

@@ -82,13 +82,17 @@ test('cloud envelopes keep global scope separate from individual score selection
   assert.equal(read().tabPlayer,undefined);
 });
 
-test('score layout is a local preference and timed mobile layout uses one measure per line', () => {
-  const code = html.slice(html.indexOf('    function measuresPerScoreLine()'), html.indexOf('    function buildDisplaySystems()'));
-  const ctx = vm.createContext({ window: { innerWidth: 527 }, els: { layout: { value: 'timed' } } });
+test('score layout stays local and compact mobile lines never exceed 25 source columns', () => {
+  const code = html.slice(html.indexOf('    function scoreLineMeasureGroups('), html.indexOf('    function buildDisplaySystems()'));
+  const ctx = vm.createContext({ window: { innerWidth: 527 }, els: { layout: { value: 'timed' } }, score: { measureColumnWidths: [8, 9, 10, 15, 7] } });
   vm.runInContext(code, ctx);
-  assert.equal(vm.runInContext('measuresPerScoreLine()', ctx), 1);
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(scoreLineMeasureGroups(5))', ctx)), [
+    { first: 0, count: 1 }, { first: 1, count: 1 }, { first: 2, count: 1 }, { first: 3, count: 1 }, { first: 4, count: 1 },
+  ]);
   vm.runInContext('els.layout.value="compact"', ctx);
-  assert.equal(vm.runInContext('measuresPerScoreLine()', ctx), 2);
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(scoreLineMeasureGroups(5))', ctx)), [
+    { first: 0, count: 2 }, { first: 2, count: 2 }, { first: 4, count: 1 },
+  ]);
   const capture = html.slice(html.indexOf('    function captureScoreDocument('), html.indexOf('    function renderScoreLibrary()'));
   assert.doesNotMatch(capture, /layout:\s*els\.layout/);
   assert.doesNotMatch(app, /score\.layout\s*\|\|\s*"compact"/);
@@ -116,8 +120,8 @@ test('audio scheduling excludes notes outside selected measures and cuts audio a
     playbackGeneration:0,score:{events:[0,4,8].map(beat=>({beat,midi:60,stringIndex:2}))},
     audioContext:{currentTime:0,createBufferSource(){const s={...node(),playbackRate:{setValueAtTime(){}},start(t){this.started=t},stop(t){this.stopped=t}};sources.push(s);return s;},createGain:node,createStereoPanner:node},
     ensureAudio(){}, async loadSampleBank(){},stopSources(){},getBpm:()=>60,practiceBounds:()=>({start:4,end:8}),
-    getCapo:()=>0,nearestSample:()=>null,pluckBuffer:()=>({}),els:{tone:{value:'acoustic'}},
-    masterGain:{},activeSources:[],document:{body:{classList:{add(){}}}},updatePlayButton(){},cancelAnimationFrame(){},requestAnimationFrame:()=>1,tick(){},rafId:0,
+    getCapo:()=>0,nearestSample:()=>null,pluckBuffer:()=>({}),els:{tone:{value:'acoustic'},autoScroll:{checked:true}},
+    masterGain:{},activeSources:[],document:{body:{classList:{add(){},toggle(){}}}},updatePlayButton(){},cancelAnimationFrame(){},requestAnimationFrame:()=>1,tick(){},rafId:0,
   });
   vm.runInContext(code,ctx);
   await vm.runInContext('scheduleFrom(4)',ctx);
