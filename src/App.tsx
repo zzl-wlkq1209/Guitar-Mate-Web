@@ -585,6 +585,9 @@ export default function App() {
   const [toolMenuOpen, setToolMenuOpen] = useState(false);
   const [tabPlayerRevision, setTabPlayerRevision] = useState(0);
   const [tabPlayerPlaying, setTabPlayerPlaying] = useState(false);
+  const [tabPlayerDirty, setTabPlayerDirty] = useState(false);
+  const [pendingToolSwitch, setPendingToolSwitch] = useState<ToolId | null>(null);
+  const pendingToolSwitchRef = useRef<ToolId | null>(null);
   const tabPlayerRef = useRef<TabPlayerFrameHandle | null>(null);
   const initialWorkspace = initialState.workspaces[initialState.activeMeter];
   const [bpm, setBpm] = useState(initialState.bpm);
@@ -607,11 +610,33 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(initialState.darkMode);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ title: string; message: string } | null>(null);
+  const pendingDeleteActionRef = useRef<(() => void) | null>(null);
   const [transferDialog, setTransferDialog] = useState<"import" | "export" | null>(null);
   const [shareCode, setShareCode] = useState("");
   const [shareCopyFallback, setShareCopyFallback] = useState<string | null>(null);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
   const [shareBusy, setShareBusy] = useState(false);
+  const [transferScope, setTransferScope] = useState<"all" | "tab" | "strum">("all");
+  const [tabTransferScores, setTabTransferScores] = useState<TabScoreDocument[] | null>(null);
+  const [playerOnlyImport, setPlayerOnlyImport] = useState(false);
+
+  useEffect(() => {
+    const receive = (event: MessageEvent) => {
+      const frame = document.querySelector<HTMLIFrameElement>("iframe.tab-player-frame");
+      if (event.origin !== window.location.origin || event.source !== frame?.contentWindow) return;
+      if (event.data?.type !== "guitar-mate-tab-transfer") return;
+      setTabTransferScores(Array.isArray(event.data.scores) ? event.data.scores : null);
+      setPlayerOnlyImport(true);
+      setTransferScope("tab");
+      setShareStatus(null);
+      setShareCode("");
+      setShareCopyFallback(null);
+      setTransferDialog(event.data.mode === "export" ? "export" : "import");
+    };
+    window.addEventListener("message", receive);
+    return () => window.removeEventListener("message", receive);
+  }, []);
   const [calibrationOpen, setCalibrationOpen] = useState(false);
   const [loopEditorOpen, setLoopEditorOpen] = useState(false);
   const [customEditorOpen, setCustomEditorOpen] = useState(false);
@@ -1430,6 +1455,17 @@ export default function App() {
     }
   };
 
+  const requestDeletion = (title: string, message: string, action: () => void) => {
+    pendingDeleteActionRef.current = action;
+    setDeleteConfirmation({ title, message });
+  };
+
+  const confirmDeletion = () => {
+    pendingDeleteActionRef.current?.();
+    pendingDeleteActionRef.current = null;
+    setDeleteConfirmation(null);
+  };
+
   const createSharePayload = (): SharedPayload => {
     const allWorkspaces = {
       ...workspacesRef.current,
@@ -1578,53 +1614,29 @@ export default function App() {
   };
 
   const exportGlobalBackup = async () => {
-    const preferences = TAB_PREFERENCE_KEYS.reduce<Record<string, string>>((result, key) => {
-      const value = window.localStorage.getItem(key);
-      if (value !== null) result[key] = value;
-      return result;
-    }, {});
-    const payload: GlobalBackup = {
-      kind: "guitar-mate-backup",
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      activeTool,
-      strum: currentStoredState(),
-      tabPlayer: {
-        library: readTabLibrary(),
-        preferences,
-      },
-    };
     await saveJsonFile(
       `guitar-mate-full-${exportTimestamp()}.json`,
-      payload,
-      "导出 Guitar Mate 完整备份",
+      transferPayload(),
+      "导出 Guitar Mate 全部资料",
     );
   };
 
   const mergeTabLibrary = (candidates: TabScoreDocument[]) => {
     const current = readTabLibrary();
-    const names = new Set(current.map((score) => score.name).filter(Boolean));
     let added = 0;
     let skipped = 0;
     const next = [...current];
 
     candidates.forEach((candidate) => {
       if (!candidate || typeof candidate.tab !== "string") return;
-      const duplicate = next.some(
-        (score) => score.tab === candidate.tab && (score.shapes ?? "") === (candidate.shapes ?? ""),
-      );
+      const fingerprint = (score: TabScoreDocument) => JSON.stringify([score.name?.trim() || "", score.artist?.trim() || "", score.tab, score.shapes || "", score.key || "G", Number(score.bpm) || 60, score.beats || "4/4", score.layout || "compact", String(score.capo || "0")]);
+      const duplicate = next.some((score) => fingerprint(score) === fingerprint(candidate));
       if (duplicate) {
         skipped += 1;
         return;
       }
       const baseName = String(candidate.name || "导入的谱面").trim() || "导入的谱面";
-      let name = baseName;
-      let suffix = 2;
-      while (names.has(name)) {
-        name = `${baseName}（导入 ${suffix}）`;
-        suffix += 1;
-      }
-      names.add(name);
+      const name = baseName;
       next.push({
         ...candidate,
         id: makeTabScoreId(),
@@ -1642,7 +1654,7 @@ export default function App() {
     });
 
     window.localStorage.setItem(TAB_LIBRARY_KEY, JSON.stringify(next));
-    if (added > 0) setTabPlayerRevision((revision) => revision + 1);
+    if (added > 0) document.querySelector<HTMLIFrameElement>("iframe.tab-player-frame")?.contentWindow?.postMessage({ type: "guitar-mate-tab-library-refresh" }, window.location.origin);
     return { added, skipped };
   };
 
@@ -1657,6 +1669,20 @@ export default function App() {
         name?: string;
         advancedMode?: boolean;
       };
+
+      if ((parsed as { kind?: string }).kind === "guitar-mate-share") {
+        const envelope = parsed as unknown as { strum?: SharedPayload; tabPlayer?: { scores: TabScoreDocument[] } };
+        if (playerOnlyImport && (envelope.strum || !envelope.tabPlayer)) throw new Error("请在全局数据与分享中导入跟练器或全部数据");
+        if (envelope.tabPlayer && (!Array.isArray(envelope.tabPlayer.scores) || envelope.tabPlayer.scores.some(score => !score || typeof score.tab !== "string"))) throw new Error("谱库内容格式无效");
+        if (envelope.strum && (envelope.strum.kind !== "guitar-mate-pattern-share" || !envelope.strum.workspaces)) throw new Error("跟练器内容格式无效");
+        const tabs = envelope.tabPlayer ? mergeTabLibrary(envelope.tabPlayer.scores) : null;
+        const strum = envelope.strum ? importSharedPayload(envelope.strum) : null;
+        if (!tabs && !strum) throw new Error("分享内容无效");
+        setShareStatus(`导入完成${tabs ? `：新增 ${tabs.added} 首谱面，跳过 ${tabs.skipped} 首重复谱面` : ""}${strum ? `；新增 ${strum.addedPatterns} 个节奏型` : ""}。`);
+        return;
+      }
+
+      if (playerOnlyImport && parsed.kind === "guitar-mate-backup") throw new Error("完整备份请从全局数据与分享导入");
 
       if (parsed.kind === "guitar-mate-backup" && parsed.strum?.workspaces && parsed.tabPlayer) {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed.strum));
@@ -1686,6 +1712,7 @@ export default function App() {
         return;
       }
 
+      if (playerOnlyImport) throw new Error("这是跟练器数据，不是吉他谱");
       const sharedResult = importSharedPayload(parsed as Partial<SharedPayload>);
       if (sharedResult) {
         setShareStatus(
@@ -1743,19 +1770,28 @@ export default function App() {
     return fallback;
   };
 
+  const transferPayload = () => ({
+    kind: "guitar-mate-share", version: 1,
+    scope: tabTransferScores ? "tab-selection" : transferScope,
+    ...(transferScope !== "tab" ? { strum: createSharePayload() } : {}),
+    ...(transferScope !== "strum" ? { tabPlayer: { format: "guitar-tab-player", scores: tabTransferScores ?? readTabLibrary() } } : {}),
+  });
+
   const createShareCode = async () => {
     setShareBusy(true);
     setShareStatus(null);
     setShareCopyFallback(null);
     try {
+      const payload = transferPayload();
+      if (JSON.stringify(payload).length > 200_000) throw new Error("资料超过云端分享大小上限，请改用本地文件或在谱库中减少选中的谱面。");
       const response = await fetch(shareApiUrl("create-share"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ payload: createSharePayload() }),
+        body: JSON.stringify({ payload }),
       });
       const result = await response.json() as { token?: string };
       if (!response.ok || !result.token) throw new Error(shareRequestError(response.status, "生成分享口令失败。"));
-      const message = `这是来自「Guitar Mate」的扫弦配置分享，30分钟内有效。复制这条消息后，打开左上角设置 -> 导入配置 -> 从分享口令导入。分享口令为「${result.token}」`;
+      const message = `这是来自「Guitar Mate」的${tabTransferScores ? `${tabTransferScores.length}首吉他谱` : transferScope === "all" ? "全部资料" : transferScope === "tab" ? "播放器谱库" : "跟练器资料"}分享，30分钟内有效。打开设置 → 数据与分享 → 导入口令。分享口令为「${result.token}」`;
       setShareCode(result.token);
       try {
         if (Capacitor.isNativePlatform()) {
@@ -1780,9 +1816,9 @@ export default function App() {
         if (Capacitor.isNativePlatform()) {
           try {
             await Share.share({
-              title: "扫弦配置分享",
+              title: "Guitar Mate 资料分享",
               text: message,
-              dialogTitle: "分享扫弦配置",
+              dialogTitle: "分享资料",
             });
           } catch {
             // The selectable text remains available when the system share sheet is unavailable.
@@ -1811,17 +1847,10 @@ export default function App() {
         body: JSON.stringify({ token }),
       });
       const result = await response.json() as { payload?: Partial<SharedPayload> };
-      const importResult = response.ok && result.payload ? importSharedPayload(result.payload) : null;
-      if (!importResult) {
+      if (!response.ok || !result.payload) {
         throw new Error(shareRequestError(response.status, "分享配置格式无效，无法导入。"));
       }
-      setShareStatus(
-        importResult.addedPatterns > 0
-          ? `已导入 ${importResult.addedPatterns} 个节奏型${importResult.importedLoopItems > 0 ? "及循环列表" : ""}。`
-          : importResult.skippedPatterns > 0
-            ? "请勿重复导入配置。"
-            : "分享内容中没有可导入的节奏型。",
-      );
+      await importTransferFile(new File([JSON.stringify(result.payload)], "分享.json", { type: "application/json" }));
       setShareCode("");
     } catch (error) {
       setShareStatus(error instanceof Error && /[\u4e00-\u9fff]/.test(error.message) ? error.message : "网络连接失败，请检查网络后重试。");
@@ -1953,11 +1982,7 @@ export default function App() {
     window.location.reload();
   };
 
-  const switchTool = (tool: ToolId) => {
-    if (tool === activeTool) {
-      setToolMenuOpen(false);
-      return;
-    }
+  const completeToolSwitch = (tool: ToolId) => {
     if (activeTool === "tab") {
       tabPlayerRef.current?.stop();
       setTabPlayerPlaying(false);
@@ -1970,6 +1995,30 @@ export default function App() {
     setActiveTool(tool);
   };
 
+  const switchTool = (tool: ToolId) => {
+    if (tool === activeTool) {
+      setToolMenuOpen(false);
+      return;
+    }
+    if (activeTool === "tab" && tabPlayerDirty) {
+      pendingToolSwitchRef.current = tool;
+      setPendingToolSwitch(tool);
+      setToolMenuOpen(false);
+      return;
+    }
+    completeToolSwitch(tool);
+  };
+
+  const handleTabDirtyChange = (dirty: boolean) => {
+    setTabPlayerDirty(dirty);
+    if (!dirty && pendingToolSwitchRef.current) {
+      const tool = pendingToolSwitchRef.current;
+      pendingToolSwitchRef.current = null;
+      setPendingToolSwitch(null);
+      completeToolSwitch(tool);
+    }
+  };
+
   const customSelected = isCustomId(selectedId);
   const lockedSlots =
     meterConfig.lockedIds.has(selectedId) ||
@@ -1978,7 +2027,7 @@ export default function App() {
   const loopSources = [...currentPractices, ...savedPatterns];
 
   useEffect(() => {
-    const hasOverlay = settingsOpen || clearConfirmOpen || transferDialog !== null || calibrationOpen || loopEditorOpen || customEditorOpen;
+    const hasOverlay = settingsOpen || clearConfirmOpen || deleteConfirmation !== null || pendingToolSwitch !== null || transferDialog !== null || calibrationOpen || loopEditorOpen || customEditorOpen;
     if (!hasOverlay) {
       return;
     }
@@ -1987,7 +2036,7 @@ export default function App() {
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [calibrationOpen, clearConfirmOpen, customEditorOpen, loopEditorOpen, settingsOpen, transferDialog]);
+  }, [calibrationOpen, clearConfirmOpen, customEditorOpen, deleteConfirmation, loopEditorOpen, pendingToolSwitch, settingsOpen, transferDialog]);
 
   return (
     <main className={["app-shell", `tool-${activeTool}`, darkMode ? "dark-mode" : ""].join(" ")} data-font-size={fontSize}>
@@ -1995,7 +2044,7 @@ export default function App() {
         <button
           className="settings-toggle"
           type="button"
-          title="设置"
+          data-tooltip="设置"
           aria-label="设置"
           onClick={() => setSettingsOpen(true)}
         >
@@ -2015,26 +2064,12 @@ export default function App() {
               <ChevronDown className={toolMenuOpen ? "open" : ""} size={19} />
             </span>
           </button>
-          {toolMenuOpen ? (
-            <>
-              <button className="tool-menu-scrim" type="button" aria-label="关闭功能菜单" onClick={() => setToolMenuOpen(false)} />
-              <div className="tool-menu" role="menu" aria-label="切换功能">
-                <button className={activeTool === "strum" ? "selected" : ""} type="button" role="menuitem" onClick={() => switchTool("strum")}>
-                  <strong>扫弦跟练器</strong>
-                  <span>节奏型、跟拍与循环练习</span>
-                </button>
-                <button className={activeTool === "tab" ? "selected" : ""} type="button" role="menuitem" onClick={() => switchTool("tab")}>
-                  <strong>吉他谱播放器</strong>
-                  <span>六线谱解析、试听与本地谱库</span>
-                </button>
-              </div>
-            </>
-          ) : null}
         </div>
         <div className="top-actions">
           <button
             className="calibration-toggle"
             type="button"
+            aria-label={`延迟校准 ${latencyMs}ms`}
             onClick={() => {
               setCalibrationOpen((open) => {
                 if (open) stopCalibration();
@@ -2042,14 +2077,14 @@ export default function App() {
               });
             }}
           >
-            延迟校准
-            <span>{latencyMs}ms</span>
+            <span className="calibration-label">延迟校准</span>
+            <span className="calibration-value">{latencyMs}ms</span>
           </button>
           <button
             className="play-button"
             type="button"
             aria-label={(activeTool === "strum" ? isPlaying : tabPlayerPlaying) ? "暂停" : "播放"}
-            title={(activeTool === "strum" ? isPlaying : tabPlayerPlaying) ? "暂停" : "播放"}
+            data-tooltip={(activeTool === "strum" ? isPlaying : tabPlayerPlaying) ? "暂停" : "播放"}
             onClick={() => {
               stopCalibration();
               if (activeTool === "strum") void togglePlayback();
@@ -2060,6 +2095,22 @@ export default function App() {
           </button>
         </div>
       </section>
+
+      {toolMenuOpen ? (
+        <>
+          <button className="tool-menu-scrim" type="button" aria-label="关闭功能菜单" onClick={() => setToolMenuOpen(false)} />
+          <div className="tool-menu" role="menu" aria-label="切换功能">
+            <button className={activeTool === "strum" ? "selected" : ""} type="button" role="menuitem" onClick={() => switchTool("strum")}>
+              <strong>扫弦跟练器</strong>
+              <span>节奏型、跟拍与循环练习</span>
+            </button>
+            <button className={activeTool === "tab" ? "selected" : ""} type="button" role="menuitem" onClick={() => switchTool("tab")}>
+              <strong>吉他谱播放器</strong>
+              <span>六线谱解析、试听与本地谱库</span>
+            </button>
+          </div>
+        </>
+      ) : null}
 
       {settingsOpen ? (
         <div className="overlay" role="presentation" onClick={() => setSettingsOpen(false)}>
@@ -2111,10 +2162,11 @@ export default function App() {
             <div className="settings-row settings-actions-row">
               <strong>数据与分享</strong>
               <div className="settings-actions">
-                <button className="settings-clear" type="button" title="清空配置" aria-label="清空配置" onClick={() => setClearConfirmOpen(true)}>
+                <button className="settings-clear" type="button" data-tooltip="清空配置" aria-label="清空配置" onClick={() => setClearConfirmOpen(true)}>
                   <Eraser size={19} />
                 </button>
-                <button type="button" title="导入配置" aria-label="导入配置" onClick={() => {
+                <button type="button" data-tooltip="导入配置" aria-label="导入配置" onClick={() => {
+                  setTabTransferScores(null); setPlayerOnlyImport(false); setTransferScope("all");
                   setShareCode("");
                   setShareCopyFallback(null);
                   setShareStatus(null);
@@ -2122,7 +2174,7 @@ export default function App() {
                 }}>
                   <Download size={19} />
                 </button>
-                <button type="button" title="导出配置" aria-label="导出配置" onClick={() => setTransferDialog("export")}>
+                <button type="button" data-tooltip="导出配置" aria-label="导出配置" onClick={() => { setTabTransferScores(null); setPlayerOnlyImport(false); setTransferScope("all"); setShareStatus(null); setShareCopyFallback(null); setTransferDialog("export"); }}>
                   <Upload size={19} />
                 </button>
               </div>
@@ -2147,8 +2199,8 @@ export default function App() {
           >
             <div className="floating-header">
               <div>
-                <strong>{transferDialog === "import" ? "导入配置" : "导出配置"}</strong>
-                <span>{transferDialog === "import" ? "自动识别完整备份、资料库或单项文件" : "按需要选择分享范围"}</span>
+                <strong>{playerOnlyImport ? transferDialog === "import" ? "导入谱面" : "导出谱面" : transferDialog === "import" ? "导入配置" : "导出配置"}</strong>
+                <span>{transferDialog === "import" ? playerOnlyImport ? "自动识别单谱或多谱，跳过完全重复的谱面" : "自动识别完整备份、资料库或单项文件" : "按需要选择分享范围"}</span>
               </div>
             </div>
             {transferDialog === "import" ? (
@@ -2157,7 +2209,7 @@ export default function App() {
                   <span className="transfer-choice-icon"><Download size={20} /></span>
                   <span>
                     <strong>选择本地文件</strong>
-                    <small>支持完整备份、扫弦资料库和吉他谱文件</small>
+                    <small>{playerOnlyImport ? "仅接受吉他谱 JSON 文件" : "支持完整备份、扫弦资料库和吉他谱文件"}</small>
                   </span>
                   <input
                     type="file"
@@ -2169,9 +2221,9 @@ export default function App() {
                     }}
                   />
                 </label>
-                {activeTool === "strum" ? (
+                {(
                   <>
-                    <div className="transfer-divider"><span>扫弦在线临时分享</span></div>
+                    <div className="transfer-divider"><span>云端临时分享 · 自动识别数据类型</span></div>
                     <div className="share-code-entry">
                       <input
                         value={shareCode}
@@ -2184,47 +2236,37 @@ export default function App() {
                       </button>
                     </div>
                   </>
-                ) : (
-                  <p className="transfer-local-note">吉他谱仅通过本地文件交换，不会上传到线上。</p>
                 )}
                 {shareStatus ? <p className="share-status">{shareStatus}</p> : null}
               </div>
             ) : (
               <div className="transfer-options">
+                {tabTransferScores ? <p className="transfer-local-note">导出已选 {tabTransferScores.length} 首谱面</p> : <div className="transfer-scope" role="group" aria-label="分享范围">{([['all', '全部'], ['tab', '播放器'], ['strum', '跟练器']] as const).map(([scope, label]) => <button type="button" key={scope} aria-pressed={transferScope === scope} onClick={() => { setTransferScope(scope); setShareStatus(null); setShareCopyFallback(null); }}>{label}</button>)}</div>}
                 <button className="transfer-choice" type="button" onClick={() => {
-                  void exportGlobalBackup();
-                  setTransferDialog(null);
+                  if (tabTransferScores) void saveJsonFile(`guitar-tabs-${exportTimestamp()}.json`, { format: "guitar-tab-player", version: 1, scores: tabTransferScores }, "导出吉他谱");
+                  else if (transferScope === "all") void exportGlobalBackup();
+                  else if (transferScope === "tab") void exportTabLibrary();
+                  else void exportPattern();
                 }}>
                   <span className="transfer-choice-icon"><Upload size={20} /></span>
                   <span>
-                    <strong>完整备份</strong>
-                    <small>扫弦设置、节奏型、循环列表和全部本地吉他谱</small>
+                    <strong>导出本地文件</strong>
+                    <small>保存所选范围的 JSON 文件</small>
                   </span>
                 </button>
-                <button className="transfer-choice" type="button" onClick={() => {
-                  void (activeTool === "strum" ? exportPattern() : exportTabLibrary());
-                  setTransferDialog(null);
-                }}>
-                  <span className="transfer-choice-icon"><Upload size={20} /></span>
-                  <span>
-                    <strong>{activeTool === "strum" ? "仅导出扫弦资料库" : "仅导出吉他谱资料库"}</strong>
-                    <small>{activeTool === "strum" ? "适合分享节奏型与循环列表" : "包含所有已保存谱面，仍只写入本地文件"}</small>
-                  </span>
-                </button>
-                {activeTool === "strum" ? (
+                {(
                   <>
                     <div className="transfer-divider"><span>在线临时分享</span></div>
                     <button className="transfer-choice compact" type="button" disabled={shareBusy} onClick={() => void createShareCode()}>
                       <span className="transfer-choice-icon"><Reply className="share-forward-icon" size={22} /></span>
                       <span>
-                        <strong>{shareBusy ? "生成中..." : "生成扫弦分享口令"}</strong>
-                        <small>仅包含扫弦资料，30 分钟后失效</small>
+                        <strong>{shareBusy ? "生成中..." : "生成云端分享口令"}</strong>
+                        <small>上传所选资料，30 分钟后失效</small>
                       </span>
                     </button>
                   </>
-                ) : (
-                  <p className="transfer-local-note">当前吉他谱功能不提供在线口令，避免谱面内容离开设备。</p>
                 )}
+                {!tabTransferScores && <p className="transfer-local-note">单首／部分谱面请进入本地谱库：单谱右侧 ⋮ → 导出，或多选后导出。</p>}
                 {shareCopyFallback ? (
                   <textarea
                     className="share-code-display"
@@ -2264,6 +2306,31 @@ export default function App() {
         </div>
       ) : null}
 
+      {deleteConfirmation ? (
+        <div className="overlay confirmation-overlay" role="presentation" onClick={() => setDeleteConfirmation(null)}>
+          <section className="floating-panel confirmation-panel" role="dialog" aria-modal="true" aria-label={deleteConfirmation.title} onClick={(event) => event.stopPropagation()}>
+            <div className="floating-header"><div><strong>{deleteConfirmation.title}</strong><span>{deleteConfirmation.message}</span></div></div>
+            <div className="confirmation-actions">
+              <button type="button" onClick={() => setDeleteConfirmation(null)}>取消</button>
+              <button className="danger-button" type="button" onClick={confirmDeletion}>确认删除</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {pendingToolSwitch ? (
+        <div className="overlay confirmation-overlay" role="presentation">
+          <section className="floating-panel confirmation-panel" role="dialog" aria-modal="true" aria-label="保存谱面修改">
+            <div className="floating-header"><div><strong>保存当前修改？</strong><span>当前谱面有尚未保存的修改。</span></div></div>
+            <div className="confirmation-actions three-actions">
+              <button type="button" onClick={() => { pendingToolSwitchRef.current = null; setPendingToolSwitch(null); }}>取消</button>
+              <button type="button" onClick={() => { const tool = pendingToolSwitchRef.current; pendingToolSwitchRef.current = null; setPendingToolSwitch(null); if (tool) completeToolSwitch(tool); }}>不保存</button>
+              <button className="danger-button" type="button" onClick={() => tabPlayerRef.current?.saveCurrent()}>保存修改</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
       {calibrationOpen ? (
         <div className="overlay" role="presentation" onClick={() => {
           stopCalibration();
@@ -2288,7 +2355,7 @@ export default function App() {
 
             <div className="latency-editor" aria-label="调整延迟">
               <div className="latency-stepper">
-                <button type="button" title="减少 20ms" aria-label="减少 20ms" onClick={() => adjustLatency(-20)}>
+                <button type="button" data-tooltip="减少 20ms" aria-label="减少 20ms" onClick={() => adjustLatency(-20)}>
                   <Minus size={17} />
                 </button>
                 <label>
@@ -2305,11 +2372,11 @@ export default function App() {
                   }}
                 />
                 </label>
-                <button type="button" title="增加 20ms" aria-label="增加 20ms" onClick={() => adjustLatency(20)}>
+                <button type="button" data-tooltip="增加 20ms" aria-label="增加 20ms" onClick={() => adjustLatency(20)}>
                   <Plus size={17} />
                 </button>
               </div>
-              <button className="icon-button latency-reset" type="button" title="重置为 0" aria-label="重置为 0" onClick={resetLatency}>
+              <button className="icon-button latency-reset" type="button" data-tooltip="重置为 0" aria-label="重置为 0" onClick={resetLatency}>
                 <RotateCcw size={18} />
               </button>
             </div>
@@ -2508,11 +2575,11 @@ export default function App() {
                     <button
                       className="delete-button"
                       type="button"
-                      title="删除"
+                      data-tooltip="删除"
                       onPointerDown={(event) => event.stopPropagation()}
                       onClick={(event) => {
                         event.stopPropagation();
-                        deleteSaved(pattern.id);
+                        requestDeletion("删除节奏型？", `确定删除“${pattern.name}”吗？删除后无法恢复。`, () => deleteSaved(pattern.id));
                       }}
                     >
                       <Trash2 size={16} />
@@ -2644,7 +2711,7 @@ export default function App() {
               <button
                 className="icon-button"
                 type="button"
-                title="关闭"
+                data-tooltip="关闭"
                 onClick={() => setLoopEditorOpen(false)}
               >
                 <X size={18} />
@@ -2702,11 +2769,11 @@ export default function App() {
                       <strong>{source.name}</strong>
                       <button
                         type="button"
-                        title="删除循环项"
+                        data-tooltip="删除循环项"
                         onPointerDown={(event) => event.stopPropagation()}
                         onClick={(event) => {
                           event.stopPropagation();
-                          removeLoopItem(item.id);
+                          requestDeletion("删除循环项？", `确定从循环中移除“${source.name}”吗？`, () => removeLoopItem(item.id));
                         }}
                       >
                         <Trash2 size={15} />
@@ -2733,6 +2800,7 @@ export default function App() {
           latencyMs={latencyMs}
           revision={tabPlayerRevision}
           onPlaybackChange={setTabPlayerPlaying}
+          onDirtyChange={handleTabDirtyChange}
         />
       )}
     </main>
