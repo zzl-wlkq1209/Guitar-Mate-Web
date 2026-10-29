@@ -35,7 +35,14 @@
     body { user-select: none; -webkit-user-select: none; }
     button, input, textarea, select { font: inherit; }
     input, textarea { user-select: text; -webkit-user-select: text; }
-    button { color: inherit; }
+    button {
+      appearance: none;
+      -webkit-appearance: none;
+      border-image: none;
+      background-image: none;
+      box-shadow: none;
+      color: inherit;
+    }
 
     .shell {
       width: min(1220px, calc(100% - 32px));
@@ -229,14 +236,14 @@
       text-rendering: geometricPrecision;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
-    .score-line { stroke: #74776d; stroke-width: 1; }
-    .score-bar { stroke: #aeb0a5; stroke-width: 1.2; }
-    .score-beam { stroke: #c3c5ba; stroke-width: 1.3; fill: none; }
-    .score-triplet-line { stroke: #c3c5ba; stroke-width: 1; fill: none; }
+    .score-line { stroke: #aeb1a8; stroke-width: 1; }
+    .score-bar { stroke: #e2e3dc; stroke-width: 1.2; }
+    .score-beam { stroke: #f0efe8; stroke-width: 1.3; fill: none; }
+    .score-triplet-line { stroke: #f0efe8; stroke-width: 1; fill: none; }
     .score-triplet-bg { fill: #10110e; }
     .score-triplet-text { fill: #f6f2e7; font-size: 10px; font-weight: 800; text-anchor: middle; dominant-baseline: central; }
-    .score-chord-connector { stroke: #c3c5ba; stroke-width: 1.2; fill: none; }
-    .score-flag { stroke: #c3c5ba; stroke-width: 1.35; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .score-chord-connector { stroke: #f0efe8; stroke-width: 1.2; fill: none; }
+    .score-flag { stroke: #f0efe8; stroke-width: 1.35; fill: none; stroke-linecap: round; stroke-linejoin: round; }
     .score-note-bg { fill: #10110e; }
     .score-note-text { fill: #f6f2e7; font-size: 11px; font-weight: 750; text-anchor: middle; dominant-baseline: central; }
     .score-x { fill: #a8aa9f; font-size: 13px; text-anchor: middle; dominant-baseline: central; }
@@ -244,14 +251,14 @@
     .score-harmonic { fill: #10110e; stroke: #e2e2d8; stroke-width: 1; }
     .score-chord-name { fill: #d4ef67; font-size: 12px; font-weight: 750; text-anchor: middle; }
     .score-system-number { fill: #e5b354; font-size: 10px; font-weight: 800; }
-    .score-legato { stroke: #e2e2d8; stroke-width: 1.1; fill: none; }
-    .score-slide { stroke: #e2e2d8; stroke-width: 1.15; fill: none; }
-    .score-arpeggio { stroke: #e2e2d8; stroke-width: 1.1; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .score-legato { stroke: #f4f3ec; stroke-width: 1.1; fill: none; }
+    .score-slide { stroke: #f4f3ec; stroke-width: 1.15; fill: none; }
+    .score-arpeggio { stroke: #f4f3ec; stroke-width: 1.1; fill: none; stroke-linecap: round; stroke-linejoin: round; }
     .score-dot { fill: #f6f2e7; }
-    .score-whole-note { stroke: #d9dbd0; stroke-width: 3; stroke-linecap: round; }
+    .score-whole-note { stroke: #f4f3ec; stroke-width: 3; stroke-linecap: round; }
     .timing-issue-bg { fill: #351817; stroke: #ef6f63; stroke-width: .8; }
     .timing-issue-text { fill: #ff9b92; font-size: 9px; font-weight: 800; text-anchor: middle; dominant-baseline: central; }
-    .score-rest { fill: #d9dbd0; font-family: "Segoe UI Symbol", "Noto Music", serif; font-size: 22px; text-anchor: middle; dominant-baseline: central; }
+    .score-rest { fill: #f4f3ec; font-family: "Segoe UI Symbol", "Noto Music", serif; font-size: 22px; text-anchor: middle; dominant-baseline: central; }
     .diagram-grid { stroke: #8c8f84; stroke-width: .8; }
     .diagram-dot { fill: #f3f0e5; }
     .diagram-mark { fill: #d5d6cf; font-size: 8px; text-anchor: middle; }
@@ -872,6 +879,7 @@
     .dialog-actions { justify-content: flex-end; padding-top: 4px; }
     .dialog-actions.split { justify-content: space-between; }
     .dialog-actions button { min-height: 40px; padding: 0 18px; border-radius: 10px; background: var(--panel); color: var(--muted); }
+    .dialog-actions.split button { flex: 1 1 0; min-width: 0; }
     .dialog-actions .primary-button { background: var(--lime); color: #fff; }
 
     .bpm-dialog-value { display: flex; align-items: baseline; justify-content: center; gap: 8px; padding: 20px 0 10px; }
@@ -903,7 +911,20 @@
     .library-list button span { color: var(--muted); font-size: 11px; }
     .library-empty { margin: 0; padding: 24px; color: var(--muted); text-align: center; }
     .library-dialog-actions { flex-wrap: wrap; justify-content: flex-start; }
-    .danger-ghost-button { min-height: 36px; margin-left: auto; padding: 0 12px; border: 1px solid var(--red); border-radius: 10px; background: transparent; color: var(--red); }
+    .library-dialog-actions > button {
+      height: 38px;
+      min-height: 38px;
+      padding: 0 14px;
+      border-radius: 10px;
+    }
+    .danger-ghost-button { margin-left: 0; border: 1px solid var(--red); background: transparent; color: var(--red); }
+
+    #tabInput {
+      min-height: 180px;
+      max-height: min(56dvh, 620px);
+      overflow-y: auto;
+      resize: vertical;
+    }
 
     @media (max-width: 640px) {
       .shell { padding-top: 0; }
@@ -941,7 +962,7 @@
       </button>
       <button id="openBpmButton" type="button">
         <strong><span id="bpmDisplay">60</span><i>›</i></strong>
-        <span>播放设置</span>
+        <span>BPM</span>
       </button>
       <button id="openLayoutButton" type="button">
         <strong><span id="layoutDisplay">紧凑版</span><i>›</i></strong>
@@ -1052,6 +1073,7 @@
             <button class="ghost-button" id="mergeButton" type="button">合并</button>
             <button class="ghost-button" id="numbersToXButton" type="button">品位→x</button>
             <button class="ghost-button" id="xToNumbersButton" type="button">x→品位</button>
+            <button class="ghost-button" id="copyTabButton" type="button">复制</button>
             <button class="primary-button" id="validateButton" type="button">内容校验</button>
           </div>
         </div>
@@ -1144,10 +1166,10 @@
 
     <dialog class="player-dialog save-dialog" id="saveScoreDialog">
       <form method="dialog" id="saveScoreForm">
-        <div class="dialog-heading"><strong>保存到本地谱库</strong><button value="cancel" aria-label="关闭">×</button></div>
-        <label class="dialog-field"><span>谱名</span><input id="saveNameField" maxlength="80" autocomplete="off" placeholder="例如：晴天" required></label>
-        <label class="dialog-field"><span>歌手</span><input id="saveArtistField" maxlength="80" autocomplete="off" placeholder="例如：周杰伦"></label>
-        <div class="dialog-actions split"><button value="cancel">取消</button><button class="primary-button" id="confirmSaveButton" value="confirm">保存</button></div>
+        <div class="dialog-heading"><strong>保存到本地谱库</strong><button value="cancel" aria-label="关闭" formnovalidate>×</button></div>
+        <label class="dialog-field"><span>谱名</span><input id="saveNameField" maxlength="80" autocomplete="off" required></label>
+        <label class="dialog-field"><span>歌手</span><input id="saveArtistField" maxlength="80" autocomplete="off"></label>
+        <div class="dialog-actions split"><button value="cancel" formnovalidate>取消</button><button class="primary-button" id="confirmSaveButton" value="confirm">保存</button></div>
       </form>
     </dialog>
 
@@ -1197,6 +1219,7 @@ Gsus2=300233`;
       merge: document.querySelector("#mergeButton"),
       numbersToX: document.querySelector("#numbersToXButton"),
       xToNumbers: document.querySelector("#xToNumbersButton"),
+      copyTab: document.querySelector("#copyTabButton"),
       librarySelect: document.querySelector("#scoreLibrarySelect"),
       scoreName: document.querySelector("#scoreNameInput"),
       scoreArtist: document.querySelector("#scoreArtistInput"),
@@ -1760,6 +1783,7 @@ Gsus2=300233`;
     }
 
     function parseScore({ reset = true } = {}) {
+      resizeTabInput();
       const shapeResult = parseShapes(els.shapes.value);
       const lines = els.tab.value.replace(/\t/g, "  ").split(/\r?\n/);
       const meterLabel = els.beats.value === "6/8" ? "6/8" : "4/4";
@@ -3467,6 +3491,27 @@ Gsus2=300233`;
       return true;
     }
 
+    function resizeTabInput() {
+      const maxHeight = Math.min(620, Math.max(240, window.innerHeight * .56));
+      els.tab.style.height = "auto";
+      const nextHeight = Math.max(180, Math.min(maxHeight, els.tab.scrollHeight + 2));
+      els.tab.style.height = `${Math.round(nextHeight)}px`;
+      els.tab.style.overflowY = els.tab.scrollHeight > maxHeight ? "auto" : "hidden";
+    }
+
+    async function copyTabText() {
+      const label = els.copyTab.textContent;
+      try {
+        await navigator.clipboard.writeText(els.tab.value);
+      } catch {
+        els.tab.focus();
+        els.tab.select();
+        document.execCommand("copy");
+      }
+      els.copyTab.textContent = "已复制";
+      setTimeout(() => { els.copyTab.textContent = label; }, 1200);
+    }
+
     function exportCurrentScore() {
       const name = els.scoreName.value.trim() || "未命名谱面";
       const scoreDocument = captureScoreDocument({ name });
@@ -3526,6 +3571,7 @@ Gsus2=300233`;
     els.play.addEventListener("click", play);
     els.replay.addEventListener("click", () => stopPlayback(true));
     els.saveScore.addEventListener("click", saveCurrentScore);
+    els.copyTab.addEventListener("click", () => void copyTabText());
     els.deleteScore.addEventListener("click", () => {
       const score = scoreLibrary.find(item => item.id === currentLibraryId);
       if (!score || !confirm(`确定从本地谱库删除“${score.name}”吗？此操作无法撤销。`)) return;
@@ -3634,6 +3680,7 @@ Gsus2=300233`;
       const willOpen = els.editorWorkspace.hidden;
       els.editorWorkspace.hidden = !willOpen;
       els.toggleEditor.textContent = willOpen ? "收起编辑区" : "编辑谱面与和弦";
+      if (willOpen) requestAnimationFrame(resizeTabInput);
     });
     els.numbersToX.addEventListener("click", () => {
       const shapes = parseShapes(els.shapes.value).shapes;
@@ -3678,6 +3725,7 @@ Gsus2=300233`;
     };
     els.tab.addEventListener("input", () => {
       if (compositionSnapshot) return;
+      resizeTabInput();
       recordEditorState();
       scheduleAutoParse();
     });
@@ -3750,6 +3798,15 @@ Gsus2=300233`;
     });
     els.countIn.addEventListener("change", () => localStorage.setItem("guitar-tab-count-in", els.countIn.checked ? "1" : "0"));
     els.loop.addEventListener("change", () => localStorage.setItem("guitar-tab-loop", els.loop.checked ? "1" : "0"));
+
+    document.querySelectorAll(".player-dialog").forEach(dialog => {
+      dialog.addEventListener("click", event => {
+        if (event.target !== dialog) return;
+        const rect = dialog.getBoundingClientRect();
+        const outside = event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom;
+        if (outside) dialog.close("cancel");
+      });
+    });
 
     window.addEventListener("message", event => {
       if (event.source !== window.parent || event.origin !== location.origin) return;
