@@ -82,6 +82,32 @@ test('cloud envelopes keep global scope separate from individual score selection
   assert.equal(read().tabPlayer,undefined);
 });
 
+test('score layout is a local preference and timed mobile layout uses one measure per line', () => {
+  const code = html.slice(html.indexOf('    function measuresPerScoreLine()'), html.indexOf('    function buildDisplaySystems()'));
+  const ctx = vm.createContext({ window: { innerWidth: 527 }, els: { layout: { value: 'timed' } } });
+  vm.runInContext(code, ctx);
+  assert.equal(vm.runInContext('measuresPerScoreLine()', ctx), 1);
+  vm.runInContext('els.layout.value="compact"', ctx);
+  assert.equal(vm.runInContext('measuresPerScoreLine()', ctx), 2);
+  const capture = html.slice(html.indexOf('    function captureScoreDocument('), html.indexOf('    function renderScoreLibrary()'));
+  assert.doesNotMatch(capture, /layout:\s*els\.layout/);
+  assert.doesNotMatch(app, /score\.layout\s*\|\|\s*"compact"/);
+});
+
+test('content validation fills leading empty beats with merged rests', () => {
+  const code = html.slice(html.indexOf('    function restTokensForDuration('), html.indexOf('    function convertChordFingeringNumbersToX('));
+  const ctx = vm.createContext({
+    els: { beats: { value: '4/4' } },
+    restDuration: token => ({ R2: 4, R1: 2, R: 1, r: .5, r1: .25, r2: .125, r3: .0625 })[token],
+    barPositions: row => [...row].flatMap((char, index) => char === '|' ? [index] : []),
+    rhythmInfo: () => ({ duration: 1 }),
+  });
+  vm.runInContext(code, ctx);
+  ctx.input = '@\n|------0|\n|-------|\n|-------|\n|-------|\n|-------|\n|-------|';
+  const output = vm.runInContext('completeMeasurePadding(input).text', ctx);
+  assert.match(output, /\|R1R-+\|/);
+});
+
 test('audio scheduling excludes notes outside selected measures and cuts audio at range end', async () => {
   const code = html.slice(html.indexOf('    async function scheduleFrom('), html.indexOf('    function currentBeat()'));
   const sources = [];

@@ -24,6 +24,7 @@
 
     * { box-sizing: border-box; }
     html { color-scheme: dark; }
+    html.dialog-open, html.dialog-open body { overflow: hidden; overscroll-behavior: none; }
     body {
       margin: 0;
       min-height: 100vh;
@@ -259,6 +260,7 @@
       background: #10110e;
       padding: 8px 10px 13px;
       scrollbar-color: #474a3b #191a15;
+      overscroll-behavior: contain;
     }
     #scoreSvg {
       display: block;
@@ -744,6 +746,7 @@
       display: block;
       max-width: min(46vw, 360px);
       min-width: 0;
+      flex: 0 1 auto;
       padding: 7px 4px;
       border: 0;
       background: transparent;
@@ -751,8 +754,10 @@
       text-align: left;
     }
 
-    .current-score-button strong { overflow: hidden; font-size: calc(15px * var(--host-font-scale)); white-space: nowrap; text-overflow: ellipsis; }
-    .current-score-cluster, .score-save-actions { display: flex; min-width: 0; align-items: center; gap: 5px; }
+    .current-score-button strong { display: block; overflow: hidden; font-size: calc(15px * var(--host-font-scale)); line-height: 1.2; white-space: nowrap; text-overflow: ellipsis; }
+    .current-score-cluster, .score-save-actions { display: flex; min-width: 0; align-items: center; gap: 4px; }
+    .current-score-cluster { flex: 1 1 auto; overflow: hidden; }
+    .score-name-part, .score-artist-part { min-width: 0; }
     .score-save-actions { margin-left: auto; }
     .score-actions-bar .ghost-button { min-height: 36px; padding: 0 11px; color: var(--lime); }
     #saveScoreButton.dirty { border-color: var(--lime); background: var(--lime-dark); color: #fff; }
@@ -769,8 +774,8 @@
       color: var(--muted);
       font-weight: 900;
     }
-    .score-icon-button { width: 24px; height: 24px; flex-basis: 24px; border: 0; color: #e5b354; }
-    .score-icon-button svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; }
+    .score-icon-button { width: 20px; height: 20px; flex-basis: 20px; border: 0; color: #e5b354; }
+    .score-icon-button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; }
     #tabGuideDialog .dialog-help { display: grid; gap: 16px; font-size: calc(12px * var(--host-font-scale)); line-height: 1.75; background: transparent; padding: 0; }
     #tabGuideDialog .dialog-help > div { padding-bottom: 12px; border-bottom: 1px solid var(--line); }
     #tabGuideDialog .dialog-help > div:last-child { border-bottom: 0; padding-bottom: 0; }
@@ -863,6 +868,11 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 18px;
       }
+
+      .edit-stage:has(> .workspace:not([hidden])) .score-scroll {
+        max-height: 490px;
+        overflow-y: auto;
+      }
     }
 
     .player-dialog {
@@ -938,20 +948,28 @@
     }
     .dialog-switch-row > span { display: grid; gap: 3px; }
     .dialog-switch-row small { color: var(--muted); font-size: 11px; }
-    .dialog-switch-row input, .library-item-check { position: relative; appearance: none; -webkit-appearance: none; width: 56px; height: 34px; flex: 0 0 56px; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); cursor: pointer; transition: background 150ms ease; }
-    .dialog-switch-row input::after, .library-item-check::after { position: absolute; top: 3px; left: 3px; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #f5f3ed; color: #72756e; content: "关"; font-size: 11px; font-weight: 750; transition: transform 150ms ease; }
-    .dialog-switch-row input:checked, .library-item-check:checked { background: var(--lime-dark); border-color: var(--lime-dark); }
-    .dialog-switch-row input:checked::after, .library-item-check:checked::after { transform: translateX(22px); color: var(--lime-dark); content: "开"; }
-    .dialog-switch-row input:focus-visible, .library-item-check:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
+    .dialog-switch-row input { position: relative; appearance: none; -webkit-appearance: none; width: 56px; height: 34px; flex: 0 0 56px; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); cursor: pointer; transition: background 150ms ease; }
+    .dialog-switch-row input::after { position: absolute; top: 3px; left: 3px; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #f5f3ed; color: #72756e; content: "关"; font-size: 11px; font-weight: 750; transition: transform 150ms ease; }
+    .dialog-switch-row input:checked { background: var(--lime-dark); border-color: var(--lime-dark); }
+    .dialog-switch-row input:checked::after { transform: translateX(22px); color: var(--lime-dark); content: "开"; }
+    .dialog-switch-row input:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
+    .library-item-check { appearance: none; -webkit-appearance: none; width: 19px; height: 19px; flex: 0 0 19px; margin: 0; border: 1.5px solid var(--muted); border-radius: 5px; background: transparent; cursor: pointer; }
+    .library-item-check:checked { border-color: var(--lime); background: var(--lime); }
+    .library-item-check:checked::after { display: block; width: 8px; height: 4px; margin: 4px 0 0 4px; border: solid #fff; border-width: 0 0 2px 2px; content: ""; transform: rotate(-45deg); }
+    .library-item-check:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
     .measure-selection { fill: #e5b354; fill-opacity: .14; stroke: #e5b354; stroke-opacity: .55; stroke-width: 1; pointer-events: none; }
 
     .dialog-actions { justify-content: flex-end; padding-top: 4px; }
     .dialog-actions.split { justify-content: space-between; }
     .dialog-actions button { min-height: 40px; padding: 0 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--muted); font-size: calc(13px * var(--host-font-scale)); font-weight: 750; }
     .library-heading-actions > button:last-child { width: 34px; height: 34px; flex-basis: 34px; border-radius: 10px; }
-    .copy-code-button { position: absolute; top: 8px; right: 10px; z-index: 3; display: grid; place-items: center; width: 28px; height: 28px; padding: 5px; border: 0; border-radius: 6px; background: var(--panel); color: var(--muted); }
-    .copy-code-button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-    .copy-code-button:hover { color: var(--text); }
+    .mobile-editor-tools { position: absolute; top: 8px; right: 10px; z-index: 3; display: flex; gap: 2px; padding: 2px; border-radius: 8px; background: color-mix(in srgb, var(--panel) 94%, transparent); }
+    .copy-code-button, .mobile-editor-tool { display: grid; place-items: center; width: 28px; height: 28px; padding: 5px; border: 0; border-radius: 6px; background: transparent; color: #e5b354; }
+    .copy-code-button svg, .mobile-editor-tool svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .copy-code-button:hover, .mobile-editor-tool:hover { color: #f4ca70; background: color-mix(in srgb, #e5b354 12%, transparent); }
+    .mobile-editor-tool { display: none; }
+    .mobile-editor-tool:disabled { color: var(--muted); opacity: .38; }
+    #validateButton { border-color: var(--lime); background: var(--lime-dark); color: #fff; }
     .dialog-actions.split button { flex: 1 1 0; min-width: 0; }
     .dialog-actions .primary-button { background: var(--lime); color: #fff; }
 
@@ -1004,8 +1022,8 @@
     .library-item-more { width: 32px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--muted); font-size: 21px; line-height: 1; }
     .library-item-more::after { top: 50%; right: calc(100% + 7px); left: auto; transform: translateY(-50%); }
     .library-item-more:hover::after, .library-item-more:focus-visible::after { transform: translateY(-50%); }
-    .library-item-check { width: 56px; height: 34px; margin-left: 0; }
-    .library-item:has(.library-item-check) { grid-template-columns: 56px minmax(0, 1fr) auto; }
+    .library-item-check { margin-left: 4px; }
+    .library-item:has(.library-item-check) { grid-template-columns: 27px minmax(0, 1fr) auto; }
     .library-empty { margin: 0; padding: 24px; color: var(--muted); text-align: center; }
     .library-batch-bar { display: flex; align-items: center; gap: 7px; }
     .library-batch-bar[hidden] { display: none; }
@@ -1027,7 +1045,8 @@
       .tab-command-bar button { padding: 8px 11px; }
       .tab-command-bar strong { font-size: 15px; }
       .score-actions-bar { margin-top: 7px; }
-      .current-score-button { max-width: 34vw; }
+      .current-score-button { max-width: min(42vw, 250px); }
+      .current-score-button strong { font-size: clamp(12px, 3.6vw, calc(15px * var(--host-font-scale))); }
       .score-actions-bar .ghost-button { padding: 0 8px; }
       .score-panel { margin-top: 7px; }
       .score-panel > .card-head { display: none; }
@@ -1037,6 +1056,16 @@
       .capo-choice-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .player-dialog form { gap: 14px; padding: 16px; }
       .choice-grid button { min-height: 44px; }
+      .mobile-editor-tools { top: auto; bottom: 9px; }
+      .mobile-editor-tool { display: grid; }
+      #tabInput { padding-right: calc(18px + 3ch); padding-bottom: 50px; }
+    }
+
+    @media (max-width: 350px) {
+      .current-score-button { max-width: 34vw; }
+      .current-score-button strong { white-space: normal; }
+      .score-title-separator { display: none; }
+      .score-artist-part { display: block; }
     }
   </style>
 </head>
@@ -1180,7 +1209,13 @@
           </div>
         </div>
         <div class="tab-editor-wrap">
-          <button class="copy-code-button" id="copyTabButton" type="button" aria-label="复制谱面文本" data-tooltip="复制" data-tooltip-align="end"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></button>
+          <div class="mobile-editor-tools" aria-label="谱面文本快捷工具">
+            <button class="mobile-editor-tool" id="undoEditorButton" type="button" aria-label="撤销" data-tooltip="撤销"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5"/><path d="M5 12h8a6 6 0 0 1 6 6"/></svg></button>
+            <button class="mobile-editor-tool" id="redoEditorButton" type="button" aria-label="重做" data-tooltip="重做"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 7 5 5-5 5"/><path d="M19 12h-8a6 6 0 0 0-6 6"/></svg></button>
+            <button class="mobile-editor-tool" id="insertColumnButton" type="button" aria-label="添加整列" data-tooltip="添加整列"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/><path d="M3 4v16M21 4v16" opacity=".55"/></svg></button>
+            <button class="mobile-editor-tool" id="deleteColumnButton" type="button" aria-label="删除前一整列" data-tooltip="删除前一整列"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h14v10H7l-4-5 4-5Z"/><path d="m11 10 4 4m0-4-4 4"/></svg></button>
+            <button class="copy-code-button" id="copyTabButton" type="button" aria-label="复制谱面文本" data-tooltip="复制" data-tooltip-align="end"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></button>
+          </div>
           <textarea id="tabInput" spellcheck="false" lang="en" inputmode="text" autocorrect="off" autocapitalize="off" aria-label="六线谱文本"></textarea>
           <div class="column-selection-overlay" id="columnSelectionOverlay" aria-hidden="true"></div>
         </div>
@@ -1380,6 +1415,10 @@ Gsus2=300233`;
       numbersToX: document.querySelector("#numbersToXButton"),
       xToNumbers: document.querySelector("#xToNumbersButton"),
       copyTab: document.querySelector("#copyTabButton"),
+      undoEditor: document.querySelector("#undoEditorButton"),
+      redoEditor: document.querySelector("#redoEditorButton"),
+      insertColumn: document.querySelector("#insertColumnButton"),
+      deleteColumn: document.querySelector("#deleteColumnButton"),
       librarySelect: document.querySelector("#scoreLibrarySelect"),
       scoreName: document.querySelector("#scoreNameInput"),
       scoreArtist: document.querySelector("#scoreArtistInput"),
@@ -1538,7 +1577,26 @@ Gsus2=300233`;
     function scoreDisplayName(document) {
       const artist = String(document?.artist || "").trim();
       const name = String(document?.name || "未命名谱面").trim() || "未命名谱面";
-      return artist ? `${artist} · ${name}` : name;
+      return artist ? `${name}·${artist}` : name;
+    }
+
+    function renderCurrentScoreLabel(scoreDocument) {
+      const name = String(scoreDocument?.name || "未保存谱面").trim() || "未保存谱面";
+      const artist = String(scoreDocument?.artist || "").trim();
+      els.currentScoreLabel.replaceChildren();
+      const namePart = window.document.createElement("span");
+      namePart.className = "score-name-part";
+      namePart.textContent = name;
+      els.currentScoreLabel.append(namePart);
+      if (artist) {
+        const separator = window.document.createElement("span");
+        separator.className = "score-title-separator";
+        separator.textContent = "·";
+        const artistPart = window.document.createElement("span");
+        artistPart.className = "score-artist-part";
+        artistPart.textContent = artist;
+        els.currentScoreLabel.append(separator, artistPart);
+      }
     }
 
     function syncCompactControls() {
@@ -1548,9 +1606,10 @@ Gsus2=300233`;
       els.layoutDisplay.textContent = els.layout.value === "timed" ? "按时值" : "紧凑版";
       els.countInSheet.checked = els.countIn.checked;
       els.loopSheet.checked = els.loop.checked;
-      els.currentScoreLabel.textContent = currentLibraryId
-        ? scoreDisplayName(scoreLibrary.find(item => item.id === currentLibraryId))
-        : (els.scoreName.value.trim() ? scoreDisplayName({ name: els.scoreName.value, artist: els.scoreArtist.value }) : "未保存谱面");
+      const current = currentLibraryId
+        ? scoreLibrary.find(item => item.id === currentLibraryId)
+        : (els.scoreName.value.trim() ? { name: els.scoreName.value, artist: els.scoreArtist.value } : null);
+      renderCurrentScoreLabel(current || { name: "未保存谱面", artist: "" });
     }
 
     function renderOptionButtons() {
@@ -1814,6 +1873,126 @@ Gsus2=300233`;
         }
       }
       return { text: lines.join("\n"), changedBlocks };
+    }
+
+    function restTokensForDuration(duration, maxCharacters = Infinity) {
+      const values = [["R2", 4], ["R1", 2], ["R", 1], ["r", .5], ["r1", .25], ["r2", .125], ["r3", .0625]];
+      const tokens = [];
+      let remaining = Math.max(0, Math.round(duration * 16) / 16);
+      values.forEach(([token, value]) => {
+        while (remaining + .0001 >= value && tokens.join("").length + token.length <= maxCharacters) {
+          tokens.push(token);
+          remaining = Math.round((remaining - value) * 16) / 16;
+        }
+      });
+      return tokens;
+    }
+
+    function completeMeasurePadding(rawText) {
+      const lines = rawText.split(/\r?\n/);
+      const beatsPerMeasure = els.beats.value === "6/8" ? 6 : 4;
+      const durationScale = els.beats.value === "6/8" ? 2 : 1;
+      let changedMeasures = 0;
+
+      for (let blockStart = 0; blockStart < lines.length; blockStart++) {
+        if (!lines[blockStart].trimStart().startsWith("@")) continue;
+        const rowIndexes = Array.from({ length: 6 }, (_, offset) => blockStart + 1 + offset);
+        const rows = rowIndexes.map(index => lines[index] || "");
+        if (rows.some(row => !row.includes("|"))) continue;
+        const width = Math.max(...rows.map(row => row.length));
+        const bars = barPositions(rows[0]);
+        let rhythmEnd = blockStart + 7;
+        while (rhythmEnd < lines.length && lines[rhythmEnd].trimStart().startsWith("%")) rhythmEnd += 1;
+        const rhythmRows = lines.slice(blockStart + 7, rhythmEnd).map(row => row.padEnd(width, " "));
+
+        for (let measure = 0; measure < bars.length - 1; measure++) {
+          const left = bars[measure];
+          const right = bars[measure + 1];
+          const entries = new Map();
+          let hasFill = false;
+
+          rows.forEach(row => {
+            for (let column = left + 1; column < right; column++) {
+              const tail = row.slice(column, right);
+              const rest = tail.match(/^(R2|R1|R|r3|r2|r1|r)/);
+              if (rest) {
+                if (!entries.has(column)) entries.set(column, { column, end: column + rest[0].length, duration: restDuration(rest[0]), rest: true });
+                column += rest[0].length - 1;
+                continue;
+              }
+              const harmonic = tail.match(/^<(\d+)>/);
+              const number = tail.match(/^\d+/);
+              const token = harmonic?.[0] || number?.[0] || (/[xX*]/.test(row[column] || "") ? row[column] : "");
+              const standaloneFill = row[column] === "=" && row[column - 1] !== "=" && !/[xX\d>]/.test(row[column - 1] || "");
+              if (standaloneFill) {
+                hasFill = true;
+                continue;
+              }
+              if (!token) continue;
+              const end = column + token.length;
+              if (/^=+/.test(row.slice(end))) hasFill = true;
+              if (!entries.has(column)) {
+                const info = rhythmInfo(column, rhythmRows, token.length);
+                entries.set(column, { column, end, duration: info.duration * durationScale, rest: false });
+              } else {
+                entries.get(column).end = Math.max(entries.get(column).end, end);
+              }
+              column += token.length - 1;
+            }
+          });
+
+          if (hasFill) continue;
+          const ordered = [...entries.values()].sort((a, b) => a.column - b.column);
+          const written = ordered.reduce((sum, entry) => sum + entry.duration, 0);
+          const deficit = Math.round((beatsPerMeasure - written) * 16) / 16;
+          if (deficit <= .0001) continue;
+
+          const firstColumn = ordered[0]?.column ?? right;
+          const lastEnd = ordered.at(-1)?.end ?? left + 1;
+          const leadingGap = Math.max(0, firstColumn - left - 1);
+          const trailingGap = Math.max(0, right - lastEnd);
+          let leadingDuration = 0;
+          if (leadingGap > 0) {
+            const gapTotal = leadingGap + trailingGap;
+            leadingDuration = gapTotal ? Math.round(deficit * leadingGap / gapTotal * 16) / 16 : deficit;
+            if (!trailingGap) leadingDuration = deficit;
+          }
+
+          const restTokens = restTokensForDuration(leadingDuration, Math.max(0, firstColumn - left - 1));
+          const restText = restTokens.join("");
+          let insertedRestDuration = 0;
+          if (restText && restText.length <= Math.max(0, firstColumn - left - 1)) {
+            const chars = (lines[rowIndexes[5]] || "").padEnd(width, "-").split("");
+            [...restText].forEach((char, offset) => { chars[left + 1 + offset] = char; });
+            lines[rowIndexes[5]] = chars.join("");
+            rows[5] = lines[rowIndexes[5]];
+            insertedRestDuration = restTokens.reduce((sum, token) => sum + restDuration(token), 0);
+          }
+
+          const trailingDuration = deficit - insertedRestDuration;
+          if (trailingDuration > .0001) {
+            const preferredColumn = Math.max(left + 1, lastEnd);
+            let fillColumn = -1;
+            for (let column = preferredColumn; column < right; column++) {
+              if ([...rows].every(row => ["-", " ", undefined].includes(row[column]))) { fillColumn = column; break; }
+            }
+            if (fillColumn < 0) {
+              for (let column = right - 1; column > left; column--) {
+                if ([...rows].every(row => ["-", " ", undefined].includes(row[column]))) { fillColumn = column; break; }
+              }
+            }
+            if (fillColumn > left) {
+              const chars = (lines[rowIndexes[5]] || "").padEnd(width, "-").split("");
+              chars[fillColumn] = "=";
+              lines[rowIndexes[5]] = chars.join("");
+              rows[5] = lines[rowIndexes[5]];
+            }
+          }
+          changedMeasures += 1;
+        }
+        blockStart = rhythmEnd - 1;
+      }
+      return { text: lines.join("\n"), changedMeasures };
     }
 
     function convertChordFingeringNumbersToX(rawText, shapes) {
@@ -2409,7 +2588,7 @@ Gsus2=300233`;
     }
 
     function measuresPerScoreLine() {
-      if (window.innerWidth <= 900) return 2;
+      if (window.innerWidth <= 900) return els.layout.value === "timed" ? 1 : 2;
       return 3;
     }
 
@@ -2468,7 +2647,7 @@ Gsus2=300233`;
       const displaySystems = buildDisplaySystems();
       const x0 = width <= 640 ? 24 : 34;
       const x1 = width - (width <= 640 ? 14 : 24);
-      let verticalCursor = 0;
+      let verticalCursor = 12;
       displaySystems.forEach(system => {
         const hasChordRow = system.markers.length > 0;
         system.stringTop = verticalCursor + (hasChordRow ? 78 : 24);
@@ -2754,6 +2933,72 @@ Gsus2=300233`;
       playhead.setAttribute("y2", visual.y2);
     }
 
+    let playbackScrollState = null;
+
+    function activeScoreScrollContainer() {
+      const internal = window.matchMedia("(min-width: 1200px)").matches && !els.editorWorkspace.hidden;
+      return internal ? els.scoreSvg.parentElement : document.scrollingElement;
+    }
+
+    function scoreSystemScrollOffset(system, container) {
+      const svgRect = els.scoreSvg.getBoundingClientRect();
+      const viewHeight = els.scoreSvg.viewBox.baseVal.height || Number(els.scoreSvg.getAttribute("height")) || svgRect.height;
+      const scale = svgRect.height / Math.max(1, viewHeight);
+      const systemTop = Math.max(0, system.stringTop - (system.markers.length ? 70 : 20)) * scale;
+      if (container === document.scrollingElement) return container.scrollTop + svgRect.top + systemTop;
+      const containerRect = container.getBoundingClientRect();
+      return container.scrollTop + svgRect.top - containerRect.top + systemTop;
+    }
+
+    function preparePlaybackAutoScroll(beat) {
+      playbackScrollState = null;
+      if (!score || !renderedScoreSystems.length) return;
+      const container = activeScoreScrollContainer();
+      if (!container) return;
+      const documentMode = container === document.scrollingElement;
+      const svgRect = els.scoreSvg.getBoundingClientRect();
+      const viewportHeight = documentMode ? window.innerHeight : container.clientHeight;
+      const fullyVisible = documentMode
+        ? svgRect.top >= 0 && svgRect.bottom <= viewportHeight
+        : container.scrollHeight <= container.clientHeight + 2;
+      if (fullyVisible) return;
+
+      const bounds = practiceBounds();
+      const playbackSystems = renderedScoreSystems.filter(system => system.startBeat < bounds.end - .0001 && system.startBeat + system.duration > bounds.start + .0001);
+      const currentSystem = playbackSystems.find(system => beatBelongsToSystem(beat, system)) || playbackSystems[0] || renderedScoreSystems[0];
+      const lastSystem = playbackSystems.at(-1) || currentSystem;
+      const topClearance = documentMode ? Math.min(150, viewportHeight * .2) : 10;
+      const maxScroll = Math.max(0, container.scrollHeight - viewportHeight);
+      const initialTarget = Math.max(0, Math.min(maxScroll, scoreSystemScrollOffset(currentSystem, container) - topClearance));
+      const svgScale = svgRect.height / Math.max(1, els.scoreSvg.viewBox.baseVal.height || svgRect.height);
+      const lastBottomOffset = scoreSystemScrollOffset(lastSystem, container) + lastSystem.renderHeight * svgScale;
+      const endTarget = Math.max(initialTarget, Math.min(maxScroll, lastBottomOffset - viewportHeight + 16));
+      if (documentMode) window.scrollTo({ top: initialTarget, behavior: "smooth" });
+      else container.scrollTo({ top: initialTarget, behavior: "smooth" });
+
+      const rowEndBeat = currentSystem.startBeat + currentSystem.duration;
+      const endBeat = Math.max(rowEndBeat, lastSystem.startBeat);
+      playbackScrollState = {
+        container,
+        documentMode,
+        startBeat: rowEndBeat,
+        endBeat,
+        startScroll: initialTarget,
+        endScroll: endTarget,
+        holdUntil: performance.now() + 360,
+      };
+    }
+
+    function updatePlaybackAutoScroll(beat) {
+      const state = playbackScrollState;
+      if (!state || performance.now() < state.holdUntil || beat < state.startBeat) return;
+      const span = Math.max(.0001, state.endBeat - state.startBeat);
+      const ratio = Math.max(0, Math.min(1, (beat - state.startBeat) / span));
+      const next = state.startScroll + (state.endScroll - state.startScroll) * ratio;
+      if (state.documentMode) state.container.scrollTop = next;
+      else state.container.scrollTop = next;
+    }
+
     function escapeHtml(value) {
       return value.replace(/[&<>"]/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"})[char]);
     }
@@ -2985,6 +3230,7 @@ Gsus2=300233`;
 
       playing = true;
       document.body.classList.add("playing");
+      if (typeof preparePlaybackAutoScroll === "function") preparePlaybackAutoScroll(beat);
       updatePlayButton();
       cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(tick);
@@ -3005,6 +3251,7 @@ Gsus2=300233`;
       els.position.textContent = formatTime(secondsForBeat(beat, playbackBpm));
       updateNowPlaying(visualBeat);
       setPlayheadPosition(visualBeat);
+      if (typeof updatePlaybackAutoScroll === "function") updatePlaybackAutoScroll(visualBeat);
       const bounds = practiceBounds();
       if (beat >= bounds.end) {
         stopSources();
@@ -3071,6 +3318,7 @@ Gsus2=300233`;
       if (!playing) return;
       pausedBeat = currentBeat();
       playing = false;
+      playbackScrollState = null;
       stopSources();
       document.body.classList.remove("playing");
       updatePlayButton();
@@ -3080,6 +3328,7 @@ Gsus2=300233`;
     function stopPlayback(fullStartNext = false) {
       playbackGeneration++;
       playing = false;
+      playbackScrollState = null;
       pausedBeat = 0;
       playFullStartNext = fullStartNext;
       stopSources();
@@ -3251,12 +3500,14 @@ Gsus2=300233`;
       editorHistory.push(state);
       if (editorHistory.length > 160) editorHistory.shift();
       editorHistoryIndex = editorHistory.length - 1;
+      syncEditorHistoryButtons();
     }
 
     function resetEditorHistory() {
       editorHistory = [];
       editorHistoryIndex = -1;
       recordEditorState();
+      syncEditorHistoryButtons();
     }
 
     function restoreEditorHistory(direction) {
@@ -3270,6 +3521,8 @@ Gsus2=300233`;
       restoringEditorHistory = false;
       clearColumnSelection();
       parseScore();
+      syncEditorHistoryButtons();
+      requestAnimationFrame(ensureEditorCaretVisible);
     }
 
     function editorMetrics() {
@@ -3283,6 +3536,35 @@ Gsus2=300233`;
         paddingLeft: parseFloat(style.paddingLeft),
         paddingTop: parseFloat(style.paddingTop),
       };
+    }
+
+    function syncEditorHistoryButtons() {
+      if (!els.undoEditor || !els.redoEditor) return;
+      els.undoEditor.disabled = editorHistoryIndex <= 0;
+      els.redoEditor.disabled = editorHistoryIndex < 0 || editorHistoryIndex >= editorHistory.length - 1;
+    }
+
+    function ensureEditorCaretVisible() {
+      if (window.innerWidth > 900 || document.activeElement !== els.tab) return;
+      const location = textLocationAtOffset(els.tab.value, els.tab.selectionEnd);
+      const metrics = editorMetrics();
+      const caretX = metrics.paddingLeft + location.column * metrics.charWidth;
+      const leftMargin = location.column > 0 ? metrics.charWidth * 8 : 0;
+      const rightMargin = metrics.charWidth * 8;
+      let nextScroll = els.tab.scrollLeft;
+      if (caretX - nextScroll < leftMargin) nextScroll = Math.max(0, caretX - leftMargin);
+      else if (caretX - nextScroll > els.tab.clientWidth - rightMargin) nextScroll = caretX - els.tab.clientWidth + rightMargin;
+      const extraRightSpace = metrics.charWidth * 3;
+      const maxScroll = Math.max(0, els.tab.scrollWidth - els.tab.clientWidth + extraRightSpace);
+      els.tab.scrollLeft = Math.max(0, Math.min(maxScroll, nextScroll));
+    }
+
+    function deletePreviousTabColumn() {
+      const block = tabBlockAtCaret();
+      if (!block || block.column <= 0) return false;
+      const caret = els.tab.selectionStart;
+      els.tab.setSelectionRange(caret - 1, caret - 1);
+      return editTabColumn("delete");
     }
 
     function textPointFromPointer(event) {
@@ -3426,6 +3708,22 @@ Gsus2=300233`;
         event.preventDefault();
         restoreEditorHistory(event.inputType === "historyRedo" ? 1 : -1);
         return;
+      }
+      if (event.inputType === "insertText" && event.data && els.tab.selectionStart === els.tab.selectionEnd) {
+        const character = normalizeCommittedAscii(event.data);
+        const block = tabBlockAtCaret();
+        if (character === "-" && block) {
+          event.preventDefault();
+          if (tabRowType(block) === "rhythm" && els.tab.value[els.tab.selectionStart] === " ") replaceTabCharacter(els.tab.selectionStart, "-");
+          else if (tabRowType(block) === "rhythm") insertTabColumnWithCurrentValue("-");
+          else editTabColumn("insert", "-");
+          return;
+        }
+        if (character === "|" && block) {
+          event.preventDefault();
+          editTabColumn("insert", "|");
+          return;
+        }
       }
       if (event.inputType === "insertText" && event.data && normalizeCommittedAscii(event.data) !== event.data) {
         event.preventDefault();
@@ -3628,7 +3926,7 @@ Gsus2=300233`;
     function readScoreLibrary() {
       try {
         const parsed = JSON.parse(localStorage.getItem(SCORE_LIBRARY_KEY) || "[]");
-        return Array.isArray(parsed) ? parsed.filter(item => item && typeof item.tab === "string") : [];
+        return Array.isArray(parsed) ? parsed.filter(item => item && typeof item.tab === "string").map(({ layout: _layout, ...item }) => item) : [];
       } catch {
         return [];
       }
@@ -3656,7 +3954,6 @@ Gsus2=300233`;
         shapes: els.shapes.value,
         bpm: Number(els.bpmNumber.value) || 60,
         beats: els.beats.value,
-        layout: els.layout.value,
         tone: els.tone.value,
         capo: els.capo.value,
         updatedAt: new Date().toISOString(),
@@ -3710,7 +4007,6 @@ Gsus2=300233`;
       els.key.value = KEY_OPTIONS.includes(document.key) ? document.key : "G";
       changeBpm(document.bpm || 60);
       els.beats.value = document.beats === "6/8" ? "6/8" : "4/4";
-      if (document.layout) els.layout.value = document.layout;
       els.tone.value = "acoustic";
       if (document.capo != null) els.capo.value = String(Math.max(-1, Math.min(6, Number(document.capo) || 0)));
       loadedBank = null;
@@ -3840,7 +4136,6 @@ Gsus2=300233`;
       els.key.value = "G";
       els.capo.value = "0";
       els.beats.value = "4/4";
-      els.layout.value = "compact";
       changeBpm(60);
       currentSavedFingerprint = scoreFingerprint(captureScoreDocument());
       clearColumnSelection();
@@ -3928,7 +4223,6 @@ Gsus2=300233`;
         shapes: String(item.shapes || ""),
         bpm: Math.max(40, Math.min(240, Number(item.bpm) || 60)),
         beats: item.beats === "6/8" ? "6/8" : "4/4",
-        layout: item.layout === "timed" ? "timed" : "compact",
         tone: "acoustic",
         capo: String(Math.max(-1, Math.min(6, Number(item.capo) || 0))),
       });
@@ -3958,7 +4252,6 @@ Gsus2=300233`;
             shapes: typeof item.shapes === "string" ? item.shapes : "",
             bpm: Math.max(40, Math.min(240, Number(item.bpm) || 60)),
             beats: item.beats === "6/8" ? "6/8" : "4/4",
-            layout: item.layout === "timed" ? "timed" : "compact",
             tone: "acoustic",
             capo: String(Math.max(-1, Math.min(6, Number(item.capo) || 0))),
             updatedAt: new Date().toISOString(),
@@ -3997,6 +4290,10 @@ Gsus2=300233`;
     els.saveAsTop.addEventListener("click", () => openSaveDialog(currentLibraryId ? "saveAs" : "create"));
     els.newScore.addEventListener("click", () => requestScoreNavigation(createBlankScore));
     els.copyTab.addEventListener("click", () => void copyTabText());
+    els.undoEditor.addEventListener("click", () => { els.tab.focus(); restoreEditorHistory(-1); });
+    els.redoEditor.addEventListener("click", () => { els.tab.focus(); restoreEditorHistory(1); });
+    els.insertColumn.addEventListener("click", () => { els.tab.focus(); editTabColumn("insert", "-"); requestAnimationFrame(ensureEditorCaretVisible); });
+    els.deleteColumn.addEventListener("click", () => { els.tab.focus(); deletePreviousTabColumn(); requestAnimationFrame(ensureEditorCaretVisible); });
     els.librarySelect.addEventListener("change", () => {
       const selected = scoreLibrary.find(item => item.id === els.librarySelect.value);
       if (selected) loadScoreDocument(selected);
@@ -4230,7 +4527,8 @@ Gsus2=300233`;
       const caret = els.tab.selectionStart;
       const normalized = normalizeTabPadding(els.tab.value);
       const rhythmResult = canonicalizeRhythmLayers(normalized);
-      const validated = rhythmResult.text;
+      const paddingResult = completeMeasurePadding(rhythmResult.text);
+      const validated = paddingResult.text;
       if (validated !== els.tab.value) {
         els.tab.setRangeText(validated, 0, els.tab.value.length, "end");
         const nextCaret = Math.min(caret, validated.length);
@@ -4238,10 +4536,14 @@ Gsus2=300233`;
         els.tab.dispatchEvent(new Event("input", { bubbles: true }));
       }
       parseScore();
-      if (rhythmResult.changedBlocks) {
+      if (rhythmResult.changedBlocks || paddingResult.changedMeasures) {
         const details = [];
         if (rhythmResult.changedBlocks) details.push(`重新分层 ${rhythmResult.changedBlocks} 个含附点的节奏区块`);
+        if (paddingResult.changedMeasures) details.push(`补齐 ${paddingResult.changedMeasures} 个小节的首尾空拍`);
         els.message.textContent = `内容校验完成：${details.join("；")}。`;
+        els.message.classList.remove("error");
+      } else {
+        els.message.textContent = "内容校验完成：六弦、节奏与每小节时值均已对齐。";
         els.message.classList.remove("error");
       }
     });
@@ -4267,7 +4569,10 @@ Gsus2=300233`;
       resizeTabInput();
       recordEditorState();
       scheduleAutoParse();
+      requestAnimationFrame(ensureEditorCaretVisible);
     });
+    els.tab.addEventListener("click", () => requestAnimationFrame(ensureEditorCaretVisible));
+    els.tab.addEventListener("keyup", () => requestAnimationFrame(ensureEditorCaretVisible));
     els.shapes.addEventListener("input", () => {
       updateDirtyState();
       resizeShapeInput();
@@ -4355,6 +4660,15 @@ Gsus2=300233`;
     els.countIn.addEventListener("change", () => localStorage.setItem("guitar-tab-count-in", els.countIn.checked ? "1" : "0"));
     els.loop.addEventListener("change", () => localStorage.setItem("guitar-tab-loop", els.loop.checked ? "1" : "0"));
 
+    function syncDialogScrollLock() {
+      const hasOpenDialog = [...document.querySelectorAll(".player-dialog")].some(dialog => dialog.open);
+      document.documentElement.classList.toggle("dialog-open", hasOpenDialog);
+      if (window.parent !== window) window.parent.postMessage({ type: "guitar-mate-tab-modal", open: hasOpenDialog }, location.origin);
+    }
+
+    const dialogObserver = new MutationObserver(syncDialogScrollLock);
+    document.querySelectorAll(".player-dialog").forEach(dialog => dialogObserver.observe(dialog, { attributes: true, attributeFilter: ["open"] }));
+
     document.querySelectorAll(".player-dialog").forEach(dialog => {
       dialog.addEventListener("click", event => {
         if (event.target !== dialog) return;
@@ -4381,6 +4695,7 @@ Gsus2=300233`;
     resizeShapeInput();
     resetEditorHistory();
     scoreLibrary = readScoreLibrary();
+    writeScoreLibrary();
     els.key.value = KEY_OPTIONS.includes(localStorage.getItem("guitar-tab-key")) ? localStorage.getItem("guitar-tab-key") : "G";
     els.countIn.checked = localStorage.getItem("guitar-tab-count-in") !== "0";
     els.loop.checked = localStorage.getItem("guitar-tab-loop") !== "0";

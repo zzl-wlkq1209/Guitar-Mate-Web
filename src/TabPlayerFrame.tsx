@@ -66,7 +66,7 @@ const TabPlayerFrame = forwardRef<TabPlayerFrameHandle, TabPlayerFrameProps>(fun
         key={revision}
         ref={frameRef}
         className="tab-player-frame"
-        src="./tab-player/index.html?v=20261029-3"
+        src="./tab-player/index.html?v=20261030-1"
         title="吉他谱播放器"
         onLoad={syncFrame}
         allow="autoplay"

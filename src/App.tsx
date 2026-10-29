@@ -109,7 +109,6 @@ type TabScoreDocument = {
   shapes?: string;
   bpm?: number;
   beats?: string;
-  layout?: string;
   tone?: string;
   capo?: string;
   updatedAt?: string;
@@ -379,7 +378,9 @@ const readTabLibrary = (): TabScoreDocument[] => {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(TAB_LIBRARY_KEY) ?? "[]");
     return Array.isArray(parsed)
-      ? parsed.filter((item): item is TabScoreDocument => Boolean(item && typeof item.tab === "string"))
+      ? parsed
+          .filter((item): item is TabScoreDocument & { layout?: string } => Boolean(item && typeof item.tab === "string"))
+          .map(({ layout: _layout, ...item }) => item)
       : [];
   } catch {
     return [];
@@ -620,11 +621,16 @@ export default function App() {
   const [transferScope, setTransferScope] = useState<"all" | "tab" | "strum">("all");
   const [tabTransferScores, setTabTransferScores] = useState<TabScoreDocument[] | null>(null);
   const [playerOnlyImport, setPlayerOnlyImport] = useState(false);
+  const [tabModalOpen, setTabModalOpen] = useState(false);
 
   useEffect(() => {
     const receive = (event: MessageEvent) => {
       const frame = document.querySelector<HTMLIFrameElement>("iframe.tab-player-frame");
       if (event.origin !== window.location.origin || event.source !== frame?.contentWindow) return;
+      if (event.data?.type === "guitar-mate-tab-modal") {
+        setTabModalOpen(Boolean(event.data.open));
+        return;
+      }
       if (event.data?.type !== "guitar-mate-tab-transfer") return;
       setTabTransferScores(Array.isArray(event.data.scores) ? event.data.scores : null);
       setPlayerOnlyImport(true);
@@ -637,6 +643,10 @@ export default function App() {
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
   }, []);
+
+  useEffect(() => {
+    if (activeTool !== "tab") setTabModalOpen(false);
+  }, [activeTool]);
   const [calibrationOpen, setCalibrationOpen] = useState(false);
   const [loopEditorOpen, setLoopEditorOpen] = useState(false);
   const [customEditorOpen, setCustomEditorOpen] = useState(false);
@@ -1629,7 +1639,7 @@ export default function App() {
 
     candidates.forEach((candidate) => {
       if (!candidate || typeof candidate.tab !== "string") return;
-      const fingerprint = (score: TabScoreDocument) => JSON.stringify([score.name?.trim() || "", score.artist?.trim() || "", score.tab, score.shapes || "", score.key || "G", Number(score.bpm) || 60, score.beats || "4/4", score.layout || "compact", String(score.capo || "0")]);
+      const fingerprint = (score: TabScoreDocument) => JSON.stringify([score.name?.trim() || "", score.artist?.trim() || "", score.tab, score.shapes || "", score.key || "G", Number(score.bpm) || 60, score.beats || "4/4", String(score.capo || "0")]);
       const duplicate = next.some((score) => fingerprint(score) === fingerprint(candidate));
       if (duplicate) {
         skipped += 1;
@@ -1645,7 +1655,6 @@ export default function App() {
         key: String(candidate.key ?? "G"),
         bpm: Math.max(40, Math.min(240, Number(candidate.bpm) || 60)),
         beats: candidate.beats === "6/8" ? "6/8" : "4/4",
-        layout: candidate.layout === "timed" ? "timed" : "compact",
         tone: "acoustic",
         capo: String(Math.max(-1, Math.min(6, Number(candidate.capo) || 0))),
         updatedAt: new Date().toISOString(),
@@ -2027,7 +2036,7 @@ export default function App() {
   const loopSources = [...currentPractices, ...savedPatterns];
 
   useEffect(() => {
-    const hasOverlay = settingsOpen || clearConfirmOpen || deleteConfirmation !== null || pendingToolSwitch !== null || transferDialog !== null || calibrationOpen || loopEditorOpen || customEditorOpen;
+    const hasOverlay = settingsOpen || clearConfirmOpen || deleteConfirmation !== null || pendingToolSwitch !== null || transferDialog !== null || calibrationOpen || loopEditorOpen || customEditorOpen || tabModalOpen;
     if (!hasOverlay) {
       return;
     }
@@ -2036,7 +2045,7 @@ export default function App() {
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [calibrationOpen, clearConfirmOpen, customEditorOpen, deleteConfirmation, loopEditorOpen, pendingToolSwitch, settingsOpen, transferDialog]);
+  }, [calibrationOpen, clearConfirmOpen, customEditorOpen, deleteConfirmation, loopEditorOpen, pendingToolSwitch, settingsOpen, tabModalOpen, transferDialog]);
 
   return (
     <main className={["app-shell", `tool-${activeTool}`, darkMode ? "dark-mode" : ""].join(" ")} data-font-size={fontSize}>
