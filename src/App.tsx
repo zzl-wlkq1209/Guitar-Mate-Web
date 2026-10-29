@@ -370,8 +370,98 @@ const defaultInitialState = (): InitialState => ({
 });
 
 const readActiveTool = (): ToolId => {
-  if (typeof window === "undefined") return "strum";
-  return window.localStorage.getItem(ACTIVE_TOOL_KEY) === "tab" ? "tab" : "strum";
+  if (typeof window === "undefined") return "tab";
+  const saved = window.localStorage.getItem(ACTIVE_TOOL_KEY);
+  return saved === "strum" ? "strum" : "tab";
+};
+
+const installGlobalTooltips = () => {
+  const tooltip = document.createElement("div");
+  tooltip.className = "global-tooltip";
+  tooltip.setAttribute("role", "tooltip");
+  document.body.appendChild(tooltip);
+  let activeTarget: HTMLElement | null = null;
+  let longPressTimer: number | null = null;
+  let longPressShown = false;
+
+  const hide = () => {
+    tooltip.classList.remove("visible");
+    activeTarget = null;
+  };
+  const show = (target: HTMLElement) => {
+    const label = target.dataset.tooltip;
+    if (!label) return;
+    activeTarget = target;
+    tooltip.textContent = label;
+    tooltip.classList.add("visible");
+    const targetRect = target.getBoundingClientRect();
+    const tipRect = tooltip.getBoundingClientRect();
+    const align = target.dataset.tooltipAlign;
+    const desiredLeft = align === "start" ? targetRect.left : align === "end" ? targetRect.right - tipRect.width : targetRect.left + (targetRect.width - tipRect.width) / 2;
+    const left = Math.max(8, Math.min(window.innerWidth - tipRect.width - 8, desiredLeft));
+    const below = targetRect.bottom + 8;
+    const top = below + tipRect.height <= window.innerHeight - 8 ? below : Math.max(8, targetRect.top - tipRect.height - 8);
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+  };
+  const tooltipTarget = (event: Event) => (event.target as Element | null)?.closest<HTMLElement>("[data-tooltip]") ?? null;
+  const onPointerOver = (event: PointerEvent) => {
+    if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+    const target = tooltipTarget(event);
+    if (target) show(target);
+  };
+  const onPointerOut = (event: PointerEvent) => {
+    if (longPressTimer !== null) window.clearTimeout(longPressTimer);
+    longPressTimer = null;
+    if (!activeTarget) return;
+    const next = event.relatedTarget as Node | null;
+    if (!next || !activeTarget.contains(next)) hide();
+  };
+  const onPointerDown = (event: PointerEvent) => {
+    if (event.pointerType === "mouse") return;
+    const target = tooltipTarget(event);
+    if (!target) return;
+    if (longPressTimer !== null) window.clearTimeout(longPressTimer);
+    longPressShown = false;
+    longPressTimer = window.setTimeout(() => {
+      longPressShown = true;
+      show(target);
+    }, 520);
+  };
+  const onPointerEnd = () => {
+    if (longPressTimer !== null) window.clearTimeout(longPressTimer);
+    longPressTimer = null;
+    if (longPressShown) window.setTimeout(hide, 900);
+  };
+  const onClick = (event: MouseEvent) => {
+    const target = tooltipTarget(event);
+    if (!target) return;
+    if (longPressShown) {
+      event.preventDefault();
+      event.stopPropagation();
+      longPressShown = false;
+      return;
+    }
+    hide();
+    target.blur();
+  };
+
+  document.addEventListener("pointerover", onPointerOver, true);
+  document.addEventListener("pointerout", onPointerOut, true);
+  document.addEventListener("pointerdown", onPointerDown, true);
+  document.addEventListener("pointerup", onPointerEnd, true);
+  document.addEventListener("pointercancel", onPointerEnd, true);
+  document.addEventListener("click", onClick, true);
+  return () => {
+    if (longPressTimer !== null) window.clearTimeout(longPressTimer);
+    document.removeEventListener("pointerover", onPointerOver, true);
+    document.removeEventListener("pointerout", onPointerOut, true);
+    document.removeEventListener("pointerdown", onPointerDown, true);
+    document.removeEventListener("pointerup", onPointerEnd, true);
+    document.removeEventListener("pointercancel", onPointerEnd, true);
+    document.removeEventListener("click", onClick, true);
+    tooltip.remove();
+  };
 };
 
 const readTabLibrary = (): TabScoreDocument[] => {
@@ -622,6 +712,8 @@ export default function App() {
   const [tabTransferScores, setTabTransferScores] = useState<TabScoreDocument[] | null>(null);
   const [playerOnlyImport, setPlayerOnlyImport] = useState(false);
   const [tabModalOpen, setTabModalOpen] = useState(false);
+
+  useEffect(() => installGlobalTooltips(), []);
 
   useEffect(() => {
     const receive = (event: MessageEvent) => {
@@ -2109,13 +2201,13 @@ export default function App() {
         <>
           <button className="tool-menu-scrim" type="button" aria-label="关闭功能菜单" onClick={() => setToolMenuOpen(false)} />
           <div className="tool-menu" role="menu" aria-label="切换功能">
-            <button className={activeTool === "strum" ? "selected" : ""} type="button" role="menuitem" onClick={() => switchTool("strum")}>
-              <strong>扫弦跟练器</strong>
-              <span>节奏型、跟拍与循环练习</span>
-            </button>
             <button className={activeTool === "tab" ? "selected" : ""} type="button" role="menuitem" onClick={() => switchTool("tab")}>
               <strong>吉他谱播放器</strong>
               <span>六线谱解析、试听与本地谱库</span>
+            </button>
+            <button className={activeTool === "strum" ? "selected" : ""} type="button" role="menuitem" onClick={() => switchTool("strum")}>
+              <strong>扫弦跟练器</strong>
+              <span>节奏型、跟拍与循环练习</span>
             </button>
           </div>
         </>

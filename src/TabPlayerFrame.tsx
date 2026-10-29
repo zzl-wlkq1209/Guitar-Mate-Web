@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 export type TabPlayerFrameHandle = {
   togglePlayback: () => void;
@@ -22,6 +22,7 @@ const TabPlayerFrame = forwardRef<TabPlayerFrameHandle, TabPlayerFrameProps>(fun
   forwardedRef,
 ) {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const [ready, setReady] = useState(false);
 
   const postToPlayer = (message: object) => {
     frameRef.current?.contentWindow?.postMessage(message, window.location.origin);
@@ -47,6 +48,8 @@ const TabPlayerFrame = forwardRef<TabPlayerFrameHandle, TabPlayerFrameProps>(fun
     syncFrame();
   }, [darkMode, fontSize, latencyMs]);
 
+  useEffect(() => setReady(false), [revision]);
+
   useEffect(() => {
     const receivePlayerMessage = (event: MessageEvent) => {
       if (event.source !== frameRef.current?.contentWindow || event.origin !== window.location.origin) return;
@@ -54,7 +57,10 @@ const TabPlayerFrame = forwardRef<TabPlayerFrameHandle, TabPlayerFrameProps>(fun
         onPlaybackChange(Boolean(event.data.playing));
       }
       if (event.data?.type === "guitar-mate-tab-dirty") onDirtyChange(Boolean(event.data.dirty));
-      if (event.data?.type === "guitar-mate-tab-ready") syncFrame();
+      if (event.data?.type === "guitar-mate-tab-ready") {
+        syncFrame();
+        setReady(true);
+      }
     };
     window.addEventListener("message", receivePlayerMessage);
     return () => window.removeEventListener("message", receivePlayerMessage);
@@ -65,8 +71,8 @@ const TabPlayerFrame = forwardRef<TabPlayerFrameHandle, TabPlayerFrameProps>(fun
       <iframe
         key={revision}
         ref={frameRef}
-        className="tab-player-frame"
-        src="./tab-player/index.html?v=20261030-1"
+        className={`tab-player-frame${ready ? " ready" : ""}`}
+        src="./tab-player/index.html?v=20261030-2"
         title="吉他谱播放器"
         onLoad={syncFrame}
         allow="autoplay"

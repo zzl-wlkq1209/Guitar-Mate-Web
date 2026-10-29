@@ -49,33 +49,10 @@
     button:active { transform: none !important; }
     [data-tooltip] { position: relative; }
     [data-tooltip]::after {
-      position: absolute;
-      z-index: 100;
-      top: calc(100% + 7px);
-      left: 50%;
-      width: max-content;
-      max-width: 180px;
-      padding: 6px 9px;
-      border: 1px solid rgba(255,255,255,.1);
-      border-radius: 7px;
-      background: #242522;
-      color: #f5f3ed;
-      box-shadow: 0 8px 24px rgba(0,0,0,.28);
-      content: attr(data-tooltip);
-      font-size: calc(11px * var(--host-font-scale));
-      font-weight: 700;
-      line-height: 1.2;
-      opacity: 0;
-      pointer-events: none;
-      transform: translate(-50%, -3px);
-      transition: opacity 120ms ease, transform 120ms ease;
-      white-space: nowrap;
+      content: none;
     }
-    [data-tooltip]:hover::after, [data-tooltip]:focus-visible::after { opacity: 1; transform: translate(-50%, 0); }
-    [data-tooltip-align="start"]::after { right: auto; left: 0; transform: translateY(-3px); }
-    [data-tooltip-align="start"]:hover::after, [data-tooltip-align="start"]:focus-visible::after { transform: translateY(0); }
-    [data-tooltip-align="end"]::after { right: 0; left: auto; transform: translateY(-3px); }
-    [data-tooltip-align="end"]:hover::after, [data-tooltip-align="end"]:focus-visible::after { transform: translateY(0); }
+    .global-tooltip { position: fixed; z-index: 100000; width: max-content; max-width: min(220px, calc(100vw - 16px)); padding: 6px 9px; border: 1px solid rgba(255,255,255,.1); border-radius: 7px; background: #242522; color: #f5f3ed; box-shadow: 0 8px 24px rgba(0,0,0,.34); font-size: calc(11px * var(--host-font-scale)); font-weight: 700; line-height: 1.2; opacity: 1; pointer-events: none; visibility: hidden; white-space: nowrap; }
+    .global-tooltip.visible { visibility: visible; }
     textarea, input, select { font-size: calc(14px * var(--host-font-scale)); }
 
     .shell {
@@ -260,8 +237,10 @@
       background: #10110e;
       padding: 8px 10px 13px;
       scrollbar-color: #474a3b #191a15;
-      overscroll-behavior: contain;
+      overscroll-behavior: auto;
+      touch-action: pan-x pan-y;
     }
+    body.playing .score-scroll { touch-action: none; }
     #scoreSvg {
       display: block;
       width: 100%;
@@ -1577,7 +1556,7 @@ Gsus2=300233`;
     function scoreDisplayName(document) {
       const artist = String(document?.artist || "").trim();
       const name = String(document?.name || "未命名谱面").trim() || "未命名谱面";
-      return artist ? `${name}·${artist}` : name;
+      return artist ? `${name} · ${artist}` : name;
     }
 
     function renderCurrentScoreLabel(scoreDocument) {
@@ -1591,7 +1570,7 @@ Gsus2=300233`;
       if (artist) {
         const separator = window.document.createElement("span");
         separator.className = "score-title-separator";
-        separator.textContent = "·";
+        separator.textContent = " · ";
         const artistPart = window.document.createElement("span");
         artistPart.className = "score-artist-part";
         artistPart.textContent = artist;
@@ -3709,23 +3688,18 @@ Gsus2=300233`;
         restoreEditorHistory(event.inputType === "historyRedo" ? 1 : -1);
         return;
       }
-      if (event.inputType === "insertText" && event.data && els.tab.selectionStart === els.tab.selectionEnd) {
-        const character = normalizeCommittedAscii(event.data);
-        const block = tabBlockAtCaret();
-        if (character === "-" && block) {
-          event.preventDefault();
-          if (tabRowType(block) === "rhythm" && els.tab.value[els.tab.selectionStart] === " ") replaceTabCharacter(els.tab.selectionStart, "-");
-          else if (tabRowType(block) === "rhythm") insertTabColumnWithCurrentValue("-");
-          else editTabColumn("insert", "-");
-          return;
-        }
-        if (character === "|" && block) {
-          event.preventDefault();
-          editTabColumn("insert", "|");
-          return;
-        }
+      if (event.isComposing || compositionSnapshot) return;
+      if (["deleteContentBackward", "deleteWordBackward"].includes(event.inputType)) {
+        event.preventDefault();
+        applyMobileDelete("backward");
+        return;
       }
-      if (event.inputType === "insertText" && event.data && normalizeCommittedAscii(event.data) !== event.data) {
+      if (["deleteContentForward", "deleteWordForward"].includes(event.inputType)) {
+        event.preventDefault();
+        applyMobileDelete("forward");
+        return;
+      }
+      if (["insertText", "insertCompositionText", "insertReplacementText"].includes(event.inputType) && event.data) {
         event.preventDefault();
         applyCommittedEditorText(event.data);
       }
@@ -3771,10 +3745,26 @@ Gsus2=300233`;
         const start = els.tab.selectionStart;
         if (start !== els.tab.selectionEnd) clearLinearTabSelection(start, els.tab.selectionEnd);
         const caret = els.tab.selectionStart;
+        if (character === "%" && createRhythmRow(caret)) continue;
         const block = tabBlockAtCaret();
         const rowType = tabRowType(block);
         const current = els.tab.value[caret];
-        if (current === "|" && rowType === "string") {
+        if (character === "-" && block) {
+          if (rowType === "rhythm" && current === " ") replaceTabCharacter(caret, "-");
+          else if (rowType === "rhythm") insertTabColumnWithCurrentValue("-");
+          else editTabColumn("insert", "-");
+        } else if (character === "|" && block) {
+          editTabColumn("insert", "|");
+        } else if (character === " " && block) {
+          const filler = tabRowFiller(block);
+          if (current === "|") {
+            editTabColumn("delete");
+            const next = Math.min(els.tab.selectionStart + 1, els.tab.value.length);
+            els.tab.setSelectionRange(next, next);
+          } else {
+            clearTabCell(caret, caret + 1, filler);
+          }
+        } else if (current === "|" && rowType === "string") {
           insertTabColumnWithCurrentValue(character);
         } else if (current !== "\n") {
           replaceTabCharacter(caret, character);
@@ -3783,6 +3773,30 @@ Gsus2=300233`;
           els.tab.dispatchEvent(new Event("input", { bubbles: true }));
         }
       }
+    }
+
+    function applyMobileDelete(direction) {
+      const start = els.tab.selectionStart;
+      const end = els.tab.selectionEnd;
+      if (start !== end) {
+        clearLinearTabSelection(start, end);
+        return;
+      }
+      const block = tabBlockAtCaret();
+      if (!block) return;
+      const filler = tabRowFiller(block);
+      if (direction === "backward") {
+        if (block.column <= 0) return;
+        if (els.tab.value[start - 1] === "|") {
+          els.tab.setSelectionRange(start - 1, start - 1);
+          editTabColumn("delete");
+        } else {
+          clearTabCell(start - 1, start - 1, filler);
+        }
+        return;
+      }
+      if (els.tab.value[start] === "|") editTabColumn("delete");
+      else clearTabCell(start, start, filler);
     }
 
     function handleEditorHistoryKey(event) {
@@ -3794,8 +3808,7 @@ Gsus2=300233`;
       return true;
     }
 
-    function createRhythmRowAtCaret(event, start) {
-      if (event.key !== "%") return false;
+    function createRhythmRow(start) {
       const beforeCaret = els.tab.value.slice(0, start).split("\n");
       const lineIndex = beforeCaret.length - 1;
       const lines = els.tab.value.split("\n");
@@ -3804,9 +3817,14 @@ Gsus2=300233`;
       while (blockStart >= 0 && !lines[blockStart].trimStart().startsWith("@")) blockStart -= 1;
       const referenceWidth = lines[blockStart + 1]?.length || 0;
       if (blockStart < 0 || lineIndex < blockStart + 7 || !referenceWidth) return false;
-      event.preventDefault();
       lines[lineIndex] = `%${" ".repeat(Math.max(0, referenceWidth - 1))}`;
       commitTabLines(els.tab.value, lines, lineIndex, 1);
+      return true;
+    }
+
+    function createRhythmRowAtCaret(event, start) {
+      if (event.key !== "%" || !createRhythmRow(start)) return false;
+      event.preventDefault();
       return true;
     }
 
@@ -4657,6 +4675,15 @@ Gsus2=300233`;
       if (playing) scheduleFrom(pausedBeat);
       else tick();
     });
+    const scoreScroller = els.scoreSvg.closest(".score-scroll");
+    scoreScroller?.addEventListener("wheel", event => {
+      if (!playing || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+      event.preventDefault();
+      window.scrollBy({ top: event.deltaY, left: 0, behavior: "auto" });
+    }, { passive: false });
+    scoreScroller?.addEventListener("touchmove", event => {
+      if (playing) event.preventDefault();
+    }, { passive: false });
     els.countIn.addEventListener("change", () => localStorage.setItem("guitar-tab-count-in", els.countIn.checked ? "1" : "0"));
     els.loop.addEventListener("change", () => localStorage.setItem("guitar-tab-loop", els.loop.checked ? "1" : "0"));
 
@@ -4677,6 +4704,73 @@ Gsus2=300233`;
         if (outside) dialog.close("cancel");
       });
     });
+
+    function installGlobalTooltips() {
+      const tooltip = document.createElement("div");
+      tooltip.className = "global-tooltip";
+      tooltip.setAttribute("role", "tooltip");
+      document.body.appendChild(tooltip);
+      let activeTarget = null;
+      let longPressTimer = null;
+      let longPressShown = false;
+      const hide = () => {
+        tooltip.classList.remove("visible");
+        activeTarget = null;
+      };
+      const show = target => {
+        if (!target?.dataset.tooltip) return;
+        activeTarget = target;
+        tooltip.textContent = target.dataset.tooltip;
+        tooltip.classList.add("visible");
+        const targetRect = target.getBoundingClientRect();
+        const tipRect = tooltip.getBoundingClientRect();
+        const align = target.dataset.tooltipAlign;
+        const desiredLeft = align === "start" ? targetRect.left : align === "end" ? targetRect.right - tipRect.width : targetRect.left + (targetRect.width - tipRect.width) / 2;
+        tooltip.style.left = `${Math.max(8, Math.min(innerWidth - tipRect.width - 8, desiredLeft))}px`;
+        const below = targetRect.bottom + 8;
+        tooltip.style.top = `${below + tipRect.height <= innerHeight - 8 ? below : Math.max(8, targetRect.top - tipRect.height - 8)}px`;
+      };
+      const targetFor = event => event.target?.closest?.("[data-tooltip]");
+      document.addEventListener("pointerover", event => {
+        if (matchMedia("(hover: hover) and (pointer: fine)").matches) show(targetFor(event));
+      }, true);
+      document.addEventListener("pointerout", event => {
+        if (longPressTimer !== null) clearTimeout(longPressTimer);
+        longPressTimer = null;
+        if (activeTarget && (!event.relatedTarget || !activeTarget.contains(event.relatedTarget))) hide();
+      }, true);
+      document.addEventListener("pointerdown", event => {
+        if (event.pointerType === "mouse") return;
+        const target = targetFor(event);
+        if (!target) return;
+        if (longPressTimer !== null) clearTimeout(longPressTimer);
+        longPressShown = false;
+        longPressTimer = setTimeout(() => {
+          longPressShown = true;
+          show(target);
+        }, 520);
+      }, true);
+      const endLongPress = () => {
+        if (longPressTimer !== null) clearTimeout(longPressTimer);
+        longPressTimer = null;
+        if (longPressShown) setTimeout(hide, 900);
+      };
+      document.addEventListener("pointerup", endLongPress, true);
+      document.addEventListener("pointercancel", endLongPress, true);
+      document.addEventListener("click", event => {
+        const target = targetFor(event);
+        if (!target) return;
+        if (longPressShown) {
+          event.preventDefault();
+          event.stopPropagation();
+          longPressShown = false;
+          return;
+        }
+        hide();
+        target.blur();
+      }, true);
+    }
+    installGlobalTooltips();
 
     window.addEventListener("message", event => {
       if (event.source !== window.parent || event.origin !== location.origin) return;

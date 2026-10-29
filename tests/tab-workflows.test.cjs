@@ -138,3 +138,17 @@ test('every section loop schedules a fresh count-in when enabled', () => {
   vm.runInContext('tick();tick();tick()',ctx);
   assert.deepEqual(calls,[{beat:8,countIn:true},{beat:8,countIn:true},{beat:8,countIn:true}]);
 });
+
+test('mobile beforeinput routes printable characters and deletion through structural editing', () => {
+  const inputBlock = html.slice(html.indexOf('    els.tab.addEventListener("beforeinput"'), html.indexOf('    els.tab.addEventListener("compositionstart"'));
+  assert.match(inputBlock, /applyCommittedEditorText\(event\.data\)/);
+  assert.match(inputBlock, /applyMobileDelete\("backward"\)/);
+  assert.match(inputBlock, /applyMobileDelete\("forward"\)/);
+  assert.match(inputBlock, /event\.isComposing \|\| compositionSnapshot/);
+  const committed = html.slice(html.indexOf('    function applyCommittedEditorText('), html.indexOf('    function handleEditorHistoryKey('));
+  assert.match(committed, /character === "%"/);
+  assert.match(committed, /character === "-"/);
+  assert.match(committed, /character === "\|"/);
+  assert.match(committed, /character === " "/);
+  assert.match(committed, /replaceTabCharacter\(caret, character\)/);
+});

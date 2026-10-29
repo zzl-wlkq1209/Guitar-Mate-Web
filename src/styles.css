@@ -84,33 +84,31 @@ button:disabled {
 }
 
 [data-tooltip]::after {
-  position: absolute;
-  z-index: 100;
-  top: calc(100% + 7px);
-  right: 0;
+  content: none;
+}
+
+.global-tooltip {
+  position: fixed;
+  z-index: 100000;
   width: max-content;
-  max-width: 180px;
+  max-width: min(220px, calc(100vw - 16px));
   padding: 6px 9px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 7px;
   background: #242522;
   color: #f5f3ed;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
-  content: attr(data-tooltip);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
   font-size: 0.72rem;
   font-weight: 700;
   line-height: 1.2;
-  opacity: 0;
+  opacity: 1;
   pointer-events: none;
-  transform: translateY(-3px);
-  transition: opacity 120ms ease, transform 120ms ease;
+  visibility: hidden;
   white-space: nowrap;
 }
 
-[data-tooltip]:hover::after,
-[data-tooltip]:focus-visible::after {
-  opacity: 1;
-  transform: translateY(0);
+.global-tooltip.visible {
+  visibility: visible;
 }
 
 .app-shell {
@@ -486,6 +484,7 @@ button:disabled {
 }
 
 .tab-player-frame {
+  opacity: 0;
   display: block;
   width: 100%;
   height: calc(100dvh - 94px);
@@ -493,6 +492,8 @@ button:disabled {
   border: 0;
   background: transparent;
 }
+
+.tab-player-frame.ready { opacity: 1; }
 
 .app-shell.tool-tab {
   height: 100dvh;
@@ -556,12 +557,15 @@ button:disabled {
   .topbar { gap: 6px; padding-inline: 8px; }
   .topbar h1 { font-size: clamp(10px, calc((100vw - 208px) / 7), 22px); overflow: hidden; text-overflow: ellipsis; }
   .topbar p { font-size: 9px; letter-spacing: .05em; }
-  .calibration-toggle .calibration-label { display: none; }
-  .calibration-toggle { width: 58px; min-width: 58px; padding: 0 4px; align-content: center; }
-  .calibration-toggle .calibration-value { font-size: 12px; line-height: 1; text-align: center; }
   .top-actions { gap: 6px; }
   .title-line svg { width: 13px; }
   .settings-toggle { width: 28px; min-width: 28px; }
+}
+
+@media (max-width: 360px) {
+  .calibration-toggle .calibration-label { display: none; }
+  .calibration-toggle { width: 58px; min-width: 58px; padding: 0 4px; align-content: center; }
+  .calibration-toggle .calibration-value { font-size: 12px; line-height: 1; text-align: center; }
 }
 
 .controls {
