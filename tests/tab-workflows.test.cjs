@@ -116,7 +116,7 @@ test('validation separates adjacent notes while extending the preceding rhythm b
   ctx.input = '@C\n|5x5|\n|---|\n|---|\n|---|\n|---|\n|---|\n%-==';
   const result = JSON.parse(vm.runInContext('JSON.stringify(separateAdjacentFrettedNotes(input))', ctx));
   assert.equal(result.insertedColumns, 2);
-  assert.equal(result.text, '@C\n|5-x-5|\n|-----|\n|-----|\n|-----|\n|-----|\n|-----|\n%--===');
+  assert.equal(result.text, '@C  \n|5-x-5|\n|-----|\n|-----|\n|-----|\n|-----|\n|-----|\n%--===');
 });
 
 test('content validation fills leading empty beats with merged rests', () => {
@@ -163,6 +163,24 @@ test('replace paste overwrites content and only grows the measure by the missing
   vm.runInContext('ensurePasteCapacity(lines,0,7,3,5);writePasteRow(lines,0,1,3,"75777","replace")', ctx);
   assert.equal(ctx.lines[1], '|--75777|');
   assert.equal(ctx.lines[2].length, ctx.lines[1].length);
+});
+
+test('measured paste maps source measures independently and preserves target bars', () => {
+  const code = html.slice(html.indexOf('    function ensureRhythmRows('), html.indexOf('    let columnDragActive'));
+  const ctx = vm.createContext({
+    barPositions: row => { const bars=[...row].flatMap((char,index)=>char==='|'?[index]:[]); return bars.length>=2?bars:[0,Math.max(1,row.length-1)]; },
+    rebuildChordLine: (line, column, mode) => mode === 'insert' ? line.slice(0,column)+' '+line.slice(column) : line,
+    tabRowType: (block,line) => line <= block.blockStart + 6 ? 'string' : 'rhythm',
+    tabRowFiller: (block,line) => line <= block.blockStart + 6 ? '-' : ' ',
+    tabBlockForLine: () => ({blockStart:0,blockEnd:7}), chordMarkers:()=>[], chordLineFromMarkers:()=> '@',
+  });
+  vm.runInContext(code, ctx);
+  ctx.lines=['@      ','|--|--|','|--|--|','|--|--|','|--|--|','|--|--|','|--|--|','%      '];
+  ctx.location={lineIndex:1,column:1};
+  vm.runInContext('writeMeasuredPasteRows(lines,0,7,location,["|5---|7|"])',ctx);
+  assert.equal(ctx.lines[1], '|5---|7-|');
+  assert.equal([...ctx.lines[1]].filter(char=>char==='|').length, 3);
+  assert.ok(ctx.lines.slice(1,7).every(row=>[...row].filter(char=>char==='|').length===3));
 });
 
 test('shift deletion removes the whole selected column range across the block', () => {
@@ -239,4 +257,64 @@ test('mobile beforeinput routes printable characters and deletion through struct
   assert.match(html, /event\.altKey && event\.key\.toLowerCase\(\) === "v"/);
   assert.match(html, /els\.tab\.focus\(\{ preventScroll: true \}\)/);
   assert.match(html, /deleteTabColumnRange\(block, selection\.left, selection\.right\)/);
+});
+
+test('editor keeps native complete selections, IME text, and a trailing creation line', () => {
+  assert.match(html, /selection\.kind !== "caret"\) return/);
+  assert.match(html, /selection\.kind === "partial-multiline"/);
+  assert.match(html, /function ensureTrailingEditorBlankLine\(\)/);
+  assert.match(html, /els\.tab\.value \+= "\\n"/);
+  const composition = html.slice(html.indexOf('    els.tab.addEventListener("compositionstart"'), html.indexOf('    function replaceTabCharacter('));
+  assert.doesNotMatch(composition, /els\.tab\.value = snapshot\.value/);
+  assert.match(composition, /dispatchEvent\(new Event\("input"/);
+});
+
+test('blank creation line scaffolds blocks and rhythm rows, while columns use custom clipboard MIME', () => {
+  assert.match(html, /function emptyTabBlock\(width = 16\)/);
+  assert.match(html, /scaffoldBlockAtBlankLine\(event\.key\)/);
+  assert.match(html, /TAB_COLUMN_MIME/);
+  assert.match(html, /setData\(TAB_COLUMN_MIME, JSON\.stringify\(payload\)\)/);
+  assert.match(html, /window\.matchMedia\("\(hover: none\), \(pointer: coarse\)"\)/);
+});
+
+test('preview renders unresolved x at the string and deduplicates measure messages', () => {
+  assert.match(html, /score-unresolved-x-ring/);
+  assert.match(html, />x<\/text>/);
+  assert.match(html, /labels = \[\.\.\.new Set\(parseIssues/);
+  assert.doesNotMatch(html, /⚠ \$\{labels/);
+  assert.match(html, /measureIssueOverlay \+= `<rect class="timing-issue-bg"/);
+  assert.match(html, /svg \+= measureIssueOverlay;\s*svg \+= unresolvedOverlay/);
+});
+
+test('undefined chords use the same red capsule language as timing issues', () => {
+  const diagram=html.slice(html.indexOf('    function diagramSvg('),html.indexOf('    function buildSystemLayout('));
+  assert.match(diagram,/if \(!shape\)/);
+  assert.match(diagram,/class="timing-issue-bg"/);
+  assert.match(diagram,/class="timing-issue-text"/);
+  assert.match(diagram,/>和弦未定义<\/text>/);
+});
+
+test('selected chord text is overwritten at fixed width from the left edge', () => {
+  const code = html.slice(html.indexOf('    function fixedWidthSelectionBounds('), html.indexOf('    let editorHistory'));
+  const value='@    G6add9   E7  \n|----------------|\n|----------------|\n|----------------|\n|----------------|\n|----------------|\n|----------------|\n%                 \n';
+  const ctx=vm.createContext({
+    els:{tab:{value}},
+    textLocationAtOffset(value,offset){const lines=value.split('\n');let run=0;for(let i=0;i<lines.length;i++){if(offset<=run+lines[i].length)return{lines,lineIndex:i,column:offset-run};run+=lines[i].length+1;}},
+    tabBlockForLine:()=>({blockStart:0,blockEnd:7}),
+    chordMarkers:line=>[...line.replace('@',' ').matchAll(/\S+/g)].map(match=>({column:match.index,name:match[0]})),
+    tabRowFiller:()=> ' ', normalizeCommittedAscii:text=>text,
+    commitTabLines(original,lines,line,column){ctx.result={lines,line,column};},
+  });
+  vm.runInContext(code,ctx);
+  const start=value.indexOf('G6add9');
+  vm.runInContext(`replaceFixedWidthSelection(${start},${start+6},"C")`,ctx);
+  assert.equal(ctx.result.lines[0].length,18);
+  assert.equal(ctx.result.lines[0],'@    C        E7  ');
+  assert.equal(ctx.result.column,6);
+});
+
+test('ctrl-v falls back to the last structured column payload when custom mime is unavailable', () => {
+  const paste=html.slice(html.indexOf('    els.tab.addEventListener("paste"'),html.indexOf('    document.addEventListener("copy"'));
+  assert.match(paste,/lastColumnClipboard\?\.text === text/);
+  assert.match(paste,/pasteColumnPayload\(payload, "replace"\)/);
 });

@@ -274,6 +274,8 @@
     .timing-issue-text { fill: #ff9b92; font-size: 9px; font-weight: 800; text-anchor: middle; dominant-baseline: central; }
     .score-parse-issue-bg { fill: #352818; stroke: #e5b354; stroke-width: .8; }
     .score-parse-issue-text { fill: #f4ca70; font-size: 8.5px; font-weight: 800; text-anchor: middle; dominant-baseline: central; }
+    .score-unresolved-x-ring { fill: #2f1717; stroke: #ef6f63; stroke-width: 1.2; }
+    .score-unresolved-x { fill: #ff8e86; font-size: 9px; font-weight: 900; text-anchor: middle; dominant-baseline: central; }
     .score-rest { fill: #f4f3ec; font-family: "Segoe UI Symbol", "Noto Music", serif; font-size: 22px; text-anchor: middle; dominant-baseline: central; }
     .diagram-grid { stroke: #8c8f84; stroke-width: .8; }
     .diagram-dot { fill: #f3f0e5; }
@@ -1058,6 +1060,7 @@
       .choice-grid button { min-height: 44px; }
       .mobile-editor-tools { top: auto; bottom: 9px; }
       .mobile-editor-tool { display: grid; }
+      .desktop-edit-hint { display: none; }
       #tabInput { padding-right: calc(18px + 3ch); padding-bottom: 50px; }
     }
 
@@ -1193,7 +1196,7 @@
         <div class="card-head">
           <div>
             <div class="card-title-row"><h2 class="card-title">谱面文本</h2><button class="info-circle-button" id="openTabGuideButton" type="button" aria-label="查看谱面文本编写规则" data-tooltip="谱面文本编写规则">i</button></div>
-            <div class="card-subtitle">“-”插整列，“|”插小节；Alt 拖选整列，Alt+V 插入所复制列</div>
+            <div class="card-subtitle desktop-edit-hint">“-”插整列，“|”插小节；Alt 拖选整列，Alt+V 插入所复制列</div>
           </div>
           <div class="head-actions">
             <button class="ghost-button" id="splitButton" type="button">分行</button>
@@ -1723,7 +1726,7 @@ Gsus2=300233`;
       const chars = Array(width).fill(" ");
       chars[0] = "@";
       markers.forEach(marker => [...marker.name].forEach((char, offset) => { chars[marker.column + offset] = char; }));
-      return chars.join("").trimEnd();
+      return chars.join("");
     }
 
     function rebuildChordLine(line, column, mode) {
@@ -1798,7 +1801,7 @@ Gsus2=300233`;
         const chordChars = Array(totalRowLength).fill(" ");
         chordChars[0] = "@";
         mappedMarkers.forEach(marker => [...marker.name].forEach((char, offset) => { if (marker.column + offset < chordChars.length) chordChars[marker.column + offset] = char; }));
-        lines[index] = chordChars.join("").trimEnd();
+        lines[index] = chordChars.join("");
         rows.forEach((row, rowIndex) => {
           const rebuilt = widths.map((width, measure) => (segments[rowIndex][measure] || "").slice(0, width).padEnd(width, "-")).join("|");
           lines[index + 1 + rowIndex] = `|${rebuilt}|`;
@@ -1807,18 +1810,11 @@ Gsus2=300233`;
         while (rhythmIndex < lines.length && lines[rhythmIndex].trimStart().startsWith("%")) {
           const rhythm = lines[rhythmIndex].padEnd(oldBars.at(-1) + 1, " ");
           const rebuilt = widths.map((width, measure) => rhythm.slice(oldBars[measure] + 1, oldBars[measure + 1]).slice(0, width).padEnd(width, " ")).join(" ");
-          lines[rhythmIndex] = `%${rebuilt}`.trimEnd();
+          lines[rhythmIndex] = `%${rebuilt}`.padEnd(totalRowLength, " ");
           rhythmIndex += 1;
         }
       }
-      const spacedLines = [];
-      lines.forEach(line => {
-        if (line.trimStart().startsWith("@") && spacedLines.length && spacedLines.at(-1).trim() !== "") {
-          spacedLines.push("");
-        }
-        spacedLines.push(line);
-      });
-      return spacedLines.join("\n");
+      return normalizeTabDocumentStructure(lines.join("\n"));
     }
 
     function canonicalizeRhythmLayers(rawText) {
@@ -2340,14 +2336,14 @@ Gsus2=300233`;
               if (!shape) {
                 warnings.push(`缺少和弦 ${chord || "（未标注）"} 的指形，无法解析 ${STRING_NAMES[stringIndex]} 的 x。`);
                 if (!unresolvedColumns.has(column)) unresolvedColumns.set(column, []);
-                unresolvedColumns.get(column).push({ stringIndex, label: chord ? `缺${chord}` : "缺和弦" });
+                unresolvedColumns.get(column).push({ stringIndex, label: "缺和弦", issueType: "unresolved-x" });
                 continue;
               }
               const shapeFret = shape[5 - stringIndex];
               if (shapeFret == null) {
                 warnings.push(`${chord} 的 ${STRING_NAMES[stringIndex]} 在指形中不发音，但谱面使用了 x。`);
                 if (!unresolvedColumns.has(column)) unresolvedColumns.set(column, []);
-                unresolvedColumns.get(column).push({ stringIndex, label: "此弦不发音" });
+                unresolvedColumns.get(column).push({ stringIndex, label: "不发音弦", issueType: "unresolved-x" });
                 continue;
               }
               fret = shapeFret;
@@ -2610,7 +2606,13 @@ Gsus2=300233`;
       const positive = shape ? shape.filter(fret => Number.isFinite(fret) && fret > 0) : [];
       const startFret = positive.length && Math.max(...positive) > 4 ? Math.min(...positive) : 1;
       let svg = `<text class="score-chord-name" x="${centerX}" y="${topY - 10}">${escapeHtml(name)}</text>`;
-      if (!shape) return svg;
+      if (!shape) {
+        const badgeWidth = 62;
+        const badgeY = topY + 8;
+        svg += `<rect class="timing-issue-bg" x="${centerX - badgeWidth / 2}" y="${badgeY - 6.5}" width="${badgeWidth}" height="13" rx="6.5"/>`;
+        svg += `<text class="timing-issue-text" x="${centerX}" y="${badgeY}">和弦未定义</text>`;
+        return svg;
+      }
       for (let string = 0; string < 6; string++) {
         const x = left + string * (width / 5);
         svg += `<line class="diagram-grid" x1="${x}" y1="${topY}" x2="${x}" y2="${topY + height}"/>`;
@@ -2763,8 +2765,9 @@ Gsus2=300233`;
       let verticalCursor = 12 + ((score.previewIssues || []).some(issue => issue.global) ? 18 : 0);
       displaySystems.forEach(system => {
         const hasChordRow = system.markers.length > 0;
+        const hasMeasureIssueRow = (score.previewIssues || []).some(issue => !issue.global && beatBelongsToSystem(issue.beat, system));
         system.stringTop = verticalCursor + (hasChordRow ? 78 : 24);
-        system.renderHeight = hasChordRow ? 158 : 108;
+        system.renderHeight = (hasChordRow ? 158 : 108) + (hasMeasureIssueRow ? 18 : 0);
         verticalCursor += system.renderHeight;
       });
       const height = verticalCursor + 6;
@@ -2816,15 +2819,36 @@ Gsus2=300233`;
         }
 
         const parseIssues = (score.previewIssues || []).filter(issue => issue.global ? systemIndex === 0 : beatBelongsToSystem(issue.beat, system));
-        parseIssues.forEach((issue, issueIndex) => {
+        let unresolvedOverlay = "";
+        parseIssues.filter(issue => issue.issueType === "unresolved-x").forEach(issue => {
+          const x = xForBeat(issue.beat);
+          const y = stringTop + issue.stringIndex * 11;
+          unresolvedOverlay += `<circle class="score-unresolved-x-ring" cx="${x}" cy="${y}" r="5.2"/>`;
+          unresolvedOverlay += `<text class="score-unresolved-x" x="${x}" y="${y + .3}">x</text>`;
+        });
+        parseIssues.filter(issue => issue.global).forEach((issue, issueIndex) => {
           const label = escapeHtml(issue.label);
           const badgeWidth = Math.max(42, Math.min(82, 14 + [...issue.label].length * 8));
-          const rawX = issue.global ? x0 + badgeWidth / 2 : xForBeat(issue.beat);
-          const x = Math.max(x0 + badgeWidth / 2, Math.min(systemRight - badgeWidth / 2, rawX));
-          const y = issue.global ? stringTop - 33 : stringTop + issue.stringIndex * 11 - 10 - (issueIndex % 2) * 14;
+          const x = x0 + badgeWidth / 2;
+          const y = stringTop - 33 - issueIndex * 14;
           svg += `<rect class="score-parse-issue-bg" x="${x - badgeWidth / 2}" y="${y - 6.5}" width="${badgeWidth}" height="13" rx="6.5"/>`;
           svg += `<text class="score-parse-issue-text" x="${x}" y="${y}">${label}</text>`;
         });
+        let measureIssueOverlay = "";
+        for (let localMeasure = 0; localMeasure < layout.barXs.length - 1; localMeasure++) {
+          const measureStart = system.startBeat + localMeasure * score.beatsPerMeasure;
+          const measureEnd = measureStart + score.beatsPerMeasure;
+          const labels = [...new Set(parseIssues
+            .filter(issue => !issue.global && issue.beat >= measureStart - 1e-6 && issue.beat < measureEnd - 1e-6)
+            .map(issue => issue.label))];
+          if (!labels.length) continue;
+          const centerX = (layout.barXs[localMeasure] + layout.barXs[localMeasure + 1]) / 2;
+          const label = labels.map(escapeHtml).join(" · ");
+          const badgeWidth = Math.max(46, 16 + [...label].length * 9);
+          const badgeY = stringBottom + 38;
+          measureIssueOverlay += `<rect class="timing-issue-bg" x="${centerX - badgeWidth / 2}" y="${badgeY - 6.5}" width="${badgeWidth}" height="13" rx="6.5"/>`;
+          measureIssueOverlay += `<text class="timing-issue-text" x="${centerX}" y="${badgeY}">${label}</text>`;
+        }
 
         system.markers.forEach(marker => {
           const diagramHalfWidth = 19;
@@ -3026,6 +3050,8 @@ Gsus2=300233`;
             svg += `<text class="score-note-text" x="${x}" y="${y}">${event.fret}</text>`;
           }
         });
+        svg += measureIssueOverlay;
+        svg += unresolvedOverlay;
       });
 
       const firstStringTop = displaySystems[0]?.stringTop ?? 24;
@@ -3520,6 +3546,115 @@ Gsus2=300233`;
       return { blockStart, blockEnd };
     }
 
+    const TAB_COLUMN_MIME = "application/x-guitar-tab-columns+json";
+
+    function emptyTabBlock(width = 16) {
+      const row = `|${"-".repeat(width)}|`;
+      const controlWidth = row.length;
+      return ["@".padEnd(controlWidth, " "), ...Array(6).fill(row), "%".padEnd(controlWidth, " ")];
+    }
+
+    function normalizeTabDocumentStructure(rawText) {
+      const input = rawText.replace(/\r/g, "").split("\n");
+      const output = [];
+      for (let index = 0; index < input.length;) {
+        const line = input[index];
+        if (!line.trimStart().startsWith("@")) {
+          if (line.trim() !== "") output.push(line);
+          index += 1;
+          continue;
+        }
+        const rows = input.slice(index + 1, index + 7);
+        if (rows.length < 6 || rows.some(row => !row.includes("|"))) {
+          output.push(line);
+          index += 1;
+          continue;
+        }
+        if (output.length && output.at(-1) !== "") output.push("");
+        const width = Math.max(line.length, ...rows.map(row => row.length));
+        output.push(line.padEnd(width, " "));
+        rows.forEach(row => output.push(row.padEnd(width, "-")));
+        index += 7;
+        while (index < input.length && input[index].trimStart().startsWith("%")) {
+          output.push(input[index].padEnd(width, " "));
+          index += 1;
+        }
+        while (index < input.length && input[index].trim() === "") index += 1;
+        output.push("");
+      }
+      while (output.length > 1 && output.at(-1) === "" && output.at(-2) === "") output.pop();
+      if (output.at(-1) !== "") output.push("");
+      return output.join("\n");
+    }
+
+    function blockSpans(value) {
+      const lines = value.split("\n");
+      const spans = [];
+      for (let line = 0; line < lines.length; line++) {
+        if (!lines[line].trimStart().startsWith("@")) continue;
+        const bounds = tabBlockForLine(lines, line);
+        if (!bounds || bounds.blockStart !== line) continue;
+        const start = offsetForLineColumn(lines, bounds.blockStart, 0);
+        let endLine = bounds.blockEnd;
+        while (endLine + 1 < lines.length && lines[endLine + 1].trim() === "") endLine += 1;
+        const end = endLine < lines.length - 1
+          ? offsetForLineColumn(lines, endLine + 1, 0)
+          : offsetForLineColumn(lines, endLine, lines[endLine].length);
+        spans.push({ ...bounds, start, end });
+        line = bounds.blockEnd;
+      }
+      return spans;
+    }
+
+    function classifyTextSelection(start, end) {
+      if (start === end) return { kind: "caret" };
+      const value = els.tab.value;
+      if (start === 0 && end === value.length) return { kind: "document" };
+      const from = textLocationAtOffset(value, start);
+      const to = textLocationAtOffset(value, end);
+      if (from.lineIndex === to.lineIndex) return { kind: "single-line" };
+      const spans = blockSpans(value).filter(span => span.start >= start && span.end <= end);
+      const exactStart = spans[0]?.start === start;
+      const exactEnd = spans.at(-1)?.end === end || (spans.at(-1) && value.slice(spans.at(-1).end, end).trim() === "");
+      return exactStart && exactEnd ? { kind: "blocks", spans } : { kind: "partial-multiline" };
+    }
+
+    function showEditorGuidance(message) {
+      els.message.textContent = message;
+      els.message.classList.add("error");
+    }
+
+    function scaffoldBlockAtBlankLine(marker = "@") {
+      const value = els.tab.value;
+      const location = textLocationAtOffset(value, els.tab.selectionStart);
+      if ((location.lines[location.lineIndex] || "").trim() !== "") return false;
+      if (marker === "%") {
+        let previous = location.lineIndex - 1;
+        while (previous >= 0 && location.lines[previous].trim() === "") previous -= 1;
+        const bounds = tabBlockForLine(location.lines, previous);
+        if (!bounds || bounds.blockEnd !== previous) return false;
+        const width = Math.max(...location.lines.slice(bounds.blockStart + 1, bounds.blockStart + 7).map(line => line.length));
+        const lines = [...location.lines];
+        lines[location.lineIndex] = "%".padEnd(width, " ");
+        if (location.lineIndex === lines.length - 1) lines.push("");
+        commitTabLines(value, lines, location.lineIndex, 1);
+        return true;
+      }
+      if (marker !== "@") return false;
+      const lines = [...location.lines];
+      lines.splice(location.lineIndex, 1, ...emptyTabBlock(), "");
+      commitTabLines(value, lines, location.lineIndex, 1);
+      return true;
+    }
+
+    function ensureTrailingEditorBlankLine() {
+      if (!els.tab.value || els.tab.value.endsWith("\n")) return;
+      const start = els.tab.selectionStart;
+      const end = els.tab.selectionEnd;
+      els.tab.value += "\n";
+      els.tab.setSelectionRange(start, end);
+    }
+
     function textLocationAtOffset(value, offset) {
       const lines = value.split("\n");
       let running = 0;
@@ -3641,13 +3776,55 @@ Gsus2=300233`;
       return true;
     }
 
+    function fixedWidthSelectionBounds(start, end) {
+      if (start >= end) return null;
+      const value = els.tab.value;
+      const from = textLocationAtOffset(value, start);
+      const to = textLocationAtOffset(value, end);
+      if (from.lineIndex !== to.lineIndex) return null;
+      const bounds = tabBlockForLine(from.lines, from.lineIndex);
+      if (!bounds) return null;
+      let left = from.column;
+      let right = to.column;
+      if (from.lineIndex === bounds.blockStart) {
+        chordMarkers(from.lines[from.lineIndex]).forEach(marker => {
+          const markerRight = marker.column + marker.name.length;
+          if (marker.column < right && markerRight > left) {
+            left = Math.min(left, marker.column);
+            right = Math.max(right, markerRight);
+          }
+        });
+      }
+      return { lines: from.lines, lineIndex: from.lineIndex, block: { ...bounds, lineIndex: from.lineIndex }, left, right };
+    }
+
+    function replaceFixedWidthSelection(start, end, rawText = "") {
+      const range = fixedWidthSelectionBounds(start, end);
+      if (!range) return false;
+      const text = normalizeCommittedAscii(rawText === " " ? "" : rawText.replace(/[\r\n]/g, ""));
+      const width = range.right - range.left;
+      const filler = tabRowFiller(range.block, range.lineIndex);
+      const source = [...text.slice(0, width)];
+      const line = range.lines[range.lineIndex].padEnd(range.right, filler);
+      const chars = [...line];
+      let sourceIndex = 0;
+      for (let column = range.left; column < range.right; column++) {
+        if (chars[column] === "|") continue;
+        chars[column] = sourceIndex < source.length ? source[sourceIndex++] : filler;
+      }
+      const lines = [...range.lines];
+      lines[range.lineIndex] = chars.join("");
+      const caretColumn = range.left + Math.min(source.length, width);
+      commitTabLines(els.tab.value, lines, range.lineIndex, caretColumn);
+      return true;
+    }
+
     let editorHistory = [];
     let editorHistoryIndex = -1;
     let restoringEditorHistory = false;
     let columnSelection = null;
     let lastColumnClipboard = null;
     let compositionSnapshot = null;
-    let compositionTimer = null;
 
     function recordEditorState() {
       if (restoringEditorHistory) return;
@@ -3886,6 +4063,58 @@ Gsus2=300233`;
       lines[lineIndex] = target.join("");
     }
 
+    function appendMeasureToBlock(lines, top, bottom, width) {
+      const finalBar = barPositions(lines[top + 1] || "").at(-1);
+      if (finalBar == null) return;
+      for (let lineIndex = top; lineIndex <= bottom; lineIndex++) {
+        if (lineIndex === top) {
+          for (let count = 0; count < width + 1; count++) lines[lineIndex] = rebuildChordLine(lines[lineIndex], finalBar, "insert");
+        } else if (lineIndex <= top + 6) {
+          const row = lines[lineIndex].padEnd(finalBar + 1, "-");
+          lines[lineIndex] = row.slice(0, finalBar) + `|${"-".repeat(width)}` + row.slice(finalBar);
+        } else {
+          const row = lines[lineIndex].padEnd(finalBar, " ");
+          lines[lineIndex] = row.slice(0, finalBar) + " ".repeat(width + 1) + row.slice(finalBar);
+        }
+      }
+    }
+
+    function writeMeasuredPasteRows(lines, top, bottom, location, sourceRows) {
+      const reference = sourceRows.find(row => [...row].filter(char => char === "|").length >= 2);
+      if (!reference) return false;
+      const sourceBars = barPositions(reference);
+      const sourceWidths = sourceBars.slice(0, -1).map((bar, index) => Math.max(1, sourceBars[index + 1] - bar - 1));
+      let targetBars = barPositions(lines[top + 1] || "");
+      let startMeasure = Math.max(0, targetBars.findIndex(bar => bar > location.column) - 1);
+      if (startMeasure < 0) startMeasure = 0;
+      while (targetBars.length - 1 < startMeasure + sourceWidths.length) {
+        appendMeasureToBlock(lines, top, bottom, sourceWidths[targetBars.length - 1 - startMeasure] || sourceWidths.at(-1));
+        targetBars = barPositions(lines[top + 1] || "");
+      }
+      let rhythmIndex = 0;
+      sourceRows.forEach((source, rowOffset) => {
+        let lineIndex = location.lineIndex + rowOffset;
+        if (source.trimStart().startsWith("%")) lineIndex = top + 7 + rhythmIndex++;
+        if (lineIndex > bottom) return;
+        sourceWidths.forEach((sourceWidth, measureOffset) => {
+          targetBars = barPositions(lines[top + 1] || "");
+          const measure = startMeasure + measureOffset;
+          const left = measureOffset === 0 ? Math.max(location.column, targetBars[measure] + 1) : targetBars[measure] + 1;
+          let right = targetBars[measure + 1];
+          const sourceStart = sourceBars[measureOffset] + 1;
+          const segment = source.padEnd(sourceBars.at(-1), " ").slice(sourceStart, sourceBars[measureOffset + 1]);
+          const missing = Math.max(0, segment.length - (right - left));
+          if (missing) {
+            insertColumnsIntoBlock(lines, top, bottom, right, missing, false);
+            targetBars = barPositions(lines[top + 1] || "");
+            right = targetBars[measure + 1];
+          }
+          writePasteRow(lines, top, lineIndex, left, segment, "replace");
+        });
+      });
+      return true;
+    }
+
     function commitPaste(lines, top, bottom, left, width, keepColumnSelection, caretLine = top + 1) {
       const nextValue = lines.join("\n");
       els.tab.setRangeText(nextValue, 0, els.tab.value.length, "end");
@@ -3927,6 +4156,10 @@ Gsus2=300233`;
       const left = location.column;
       const sourceRhythmCount = sourceRows.filter(row => row.trimStart().startsWith("%")).length;
       let bottom = ensureRhythmRows(lines, bounds.blockStart, Math.max(0, bounds.blockEnd - bounds.blockStart - 6, sourceRhythmCount));
+      if (writeMeasuredPasteRows(lines, bounds.blockStart, bottom, location, sourceRows)) {
+        const width = Math.max(0, ...sourceRows.map(row => row.length));
+        return commitPaste(lines, bounds.blockStart, bottom, location.column, width, false, location.lineIndex + sourceRows.length - 1);
+      }
       const width = Math.max(0, ...sourceRows.map(row => row.length));
       ensurePasteCapacity(lines, bounds.blockStart, bottom, left, width);
       let rhythmIndex = 0;
@@ -3943,6 +4176,10 @@ Gsus2=300233`;
 
     let columnDragActive = false;
     els.tab.addEventListener("pointerdown", event => {
+      if (window.matchMedia("(hover: none), (pointer: coarse)").matches || window.innerWidth <= 900) {
+        clearColumnSelection();
+        return;
+      }
       if (!event.altKey) {
         clearColumnSelection();
         return;
@@ -3976,6 +4213,7 @@ Gsus2=300233`;
       if (!payload) { lastColumnClipboard = null; return; }
       event.preventDefault();
       event.clipboardData.setData("text/plain", payload.text);
+      event.clipboardData.setData(TAB_COLUMN_MIME, JSON.stringify(payload));
       lastColumnClipboard = payload;
     });
     els.tab.addEventListener("cut", event => {
@@ -3983,14 +4221,62 @@ Gsus2=300233`;
       if (!payload) { lastColumnClipboard = null; return; }
       event.preventDefault();
       event.clipboardData.setData("text/plain", payload.text);
+      event.clipboardData.setData(TAB_COLUMN_MIME, JSON.stringify(payload));
       lastColumnClipboard = payload;
       clearColumnSelectionContents();
     });
     els.tab.addEventListener("paste", event => {
       const text = event.clipboardData.getData("text/plain");
-      event.preventDefault();
-      if (lastColumnClipboard?.text === text) pasteColumnPayload(lastColumnClipboard, "replace");
-      else pastePlainText(text);
+      const encodedColumns = event.clipboardData.getData(TAB_COLUMN_MIME);
+      const selection = classifyTextSelection(els.tab.selectionStart, els.tab.selectionEnd);
+      if (selection.kind === "partial-multiline") {
+        event.preventDefault();
+        showEditorGuidance("请完整选择一个谱块，或在电脑端按 Alt 拖选整列。");
+        return;
+      }
+      let columnPayload = null;
+      if (encodedColumns) {
+        try {
+          columnPayload = JSON.parse(encodedColumns);
+        } catch {}
+      } else if (lastColumnClipboard?.text === text) {
+        columnPayload = lastColumnClipboard;
+      }
+      if (columnPayload) {
+        try {
+          const payload = columnPayload;
+          if (selection.kind === "blocks" || selection.kind === "document") {
+            event.preventDefault();
+            const wrapped = normalizeTabDocumentStructure(["@", ...Array(6).fill("|" + "-".repeat(payload.width) + "|"), "%", ""].join("\n"));
+            els.tab.setRangeText(wrapped, els.tab.selectionStart, els.tab.selectionEnd, "end");
+            const insertionStart = els.tab.selectionStart - wrapped.length;
+            els.tab.setSelectionRange(insertionStart + 2, insertionStart + 2);
+            pasteColumnPayload(payload, "replace");
+            return;
+          }
+          if (selection.kind === "caret" && tabBlockAtCaret()) {
+            event.preventDefault();
+            pasteColumnPayload(payload, "replace");
+            return;
+          }
+        } catch {}
+      }
+      if (selection.kind === "single-line" && !text.includes("\n") && fixedWidthSelectionBounds(els.tab.selectionStart, els.tab.selectionEnd)) {
+        event.preventDefault();
+        replaceFixedWidthSelection(els.tab.selectionStart, els.tab.selectionEnd, text);
+        return;
+      }
+      if (selection.kind === "document" || selection.kind === "blocks") {
+        event.preventDefault();
+        const normalized = normalizeTabDocumentStructure(text);
+        els.tab.setRangeText(normalized, els.tab.selectionStart, els.tab.selectionEnd, "end");
+        els.tab.dispatchEvent(new Event("input", { bubbles: true }));
+        return;
+      }
+      if (selection.kind === "caret" && tabBlockAtCaret()) {
+        event.preventDefault();
+        pastePlainText(text);
+      }
     });
     document.addEventListener("copy", event => {
       if (event.target !== els.tab || !normalizedColumnSelection()) lastColumnClipboard = null;
@@ -4002,12 +4288,33 @@ Gsus2=300233`;
         return;
       }
       if (event.isComposing || compositionSnapshot) return;
+      const selection = classifyTextSelection(els.tab.selectionStart, els.tab.selectionEnd);
+      if (selection.kind === "partial-multiline" && (event.inputType.startsWith("delete") || event.inputType.startsWith("insert"))) {
+        event.preventDefault();
+        showEditorGuidance("不完整的跨行选择会破坏谱面结构，请选择完整谱块。");
+        return;
+      }
+      if (selection.kind === "single-line" && fixedWidthSelectionBounds(els.tab.selectionStart, els.tab.selectionEnd)) {
+        if (event.inputType.startsWith("delete")) {
+          event.preventDefault();
+          replaceFixedWidthSelection(els.tab.selectionStart, els.tab.selectionEnd, "");
+          return;
+        }
+        if (["insertText", "insertCompositionText", "insertReplacementText"].includes(event.inputType) && event.data) {
+          event.preventDefault();
+          replaceFixedWidthSelection(els.tab.selectionStart, els.tab.selectionEnd, event.data);
+          return;
+        }
+      }
+      if (selection.kind !== "caret") return;
       if (["deleteContentBackward", "deleteWordBackward"].includes(event.inputType)) {
+        if (!tabBlockAtCaret()) return;
         event.preventDefault();
         applyMobileDelete("backward");
         return;
       }
       if (["deleteContentForward", "deleteWordForward"].includes(event.inputType)) {
+        if (!tabBlockAtCaret()) return;
         event.preventDefault();
         applyMobileDelete("forward");
         return;
@@ -4018,25 +4325,12 @@ Gsus2=300233`;
       }
     });
     els.tab.addEventListener("compositionstart", () => {
-      clearTimeout(compositionTimer);
-      compositionSnapshot = {
-        value: els.tab.value,
-        start: els.tab.selectionStart,
-        end: els.tab.selectionEnd,
-      };
+      compositionSnapshot = true;
     });
-    els.tab.addEventListener("compositionend", event => {
-      const committedText = event.data || "";
-      compositionTimer = setTimeout(() => {
-        if (!compositionSnapshot) return;
-        const snapshot = compositionSnapshot;
-        compositionSnapshot = null;
-        restoringEditorHistory = true;
-        els.tab.value = snapshot.value;
-        els.tab.setSelectionRange(snapshot.start, snapshot.end);
-        restoringEditorHistory = false;
-        applyCommittedEditorText(committedText);
-      }, 0);
+    els.tab.addEventListener("compositionend", () => {
+      compositionSnapshot = null;
+      ensureTrailingEditorBlankLine();
+      els.tab.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
     function replaceTabCharacter(start, character) {
@@ -4058,7 +4352,7 @@ Gsus2=300233`;
         const start = els.tab.selectionStart;
         if (start !== els.tab.selectionEnd) clearLinearTabSelection(start, els.tab.selectionEnd);
         const caret = els.tab.selectionStart;
-        if (character === "%" && createRhythmRow(caret)) continue;
+        if ((character === "@" || character === "%") && scaffoldBlockAtBlankLine(character)) continue;
         const block = tabBlockAtCaret();
         const rowType = tabRowType(block);
         const current = els.tab.value[caret];
@@ -4088,7 +4382,11 @@ Gsus2=300233`;
       const start = els.tab.selectionStart;
       const end = els.tab.selectionEnd;
       if (start !== end) {
-        clearLinearTabSelection(start, end);
+        const selection = classifyTextSelection(start, end);
+        if (selection.kind === "single-line" || selection.kind === "blocks" || selection.kind === "document") {
+          els.tab.setRangeText("", start, end, "end");
+          els.tab.dispatchEvent(new Event("input", { bubbles: true }));
+        }
         return;
       }
       const block = tabBlockAtCaret();
@@ -4123,6 +4421,7 @@ Gsus2=300233`;
       const referenceWidth = lines[blockStart + 1]?.length || 0;
       if (blockStart < 0 || lineIndex < blockStart + 7 || !referenceWidth) return false;
       lines[lineIndex] = `%${" ".repeat(Math.max(0, referenceWidth - 1))}`;
+      if (lineIndex === lines.length - 1) lines.push("");
       commitTabLines(els.tab.value, lines, lineIndex, 1);
       return true;
     }
@@ -4233,7 +4532,7 @@ Gsus2=300233`;
     els.tab.addEventListener("keydown", event => {
       if (handleEditorHistoryKey(event)) return;
       if (event.altKey && event.key.toLowerCase() === "v") {
-        if (!lastColumnClipboard) return;
+        if (!lastColumnClipboard || window.innerWidth <= 900 || window.matchMedia("(hover: none), (pointer: coarse)").matches) return;
         event.preventDefault();
         pasteColumnPayload(lastColumnClipboard, "insert");
         return;
@@ -4247,10 +4546,22 @@ Gsus2=300233`;
       if (handleWholeColumnDelete(event, block, start, end)) return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (start !== els.tab.selectionEnd) {
-        if (["Backspace", "Delete", " "].includes(event.key)) {
+        const selection = classifyTextSelection(start, els.tab.selectionEnd);
+        if (selection.kind === "partial-multiline" && ["Backspace", "Delete", " "].includes(event.key)) {
           event.preventDefault();
-          clearLinearTabSelection(start, els.tab.selectionEnd);
+          showEditorGuidance("不完整的跨行选择会破坏谱面结构，请选择完整谱块。");
+          return;
         }
+        if (selection.kind === "single-line" && fixedWidthSelectionBounds(start, els.tab.selectionEnd)
+          && (["Backspace", "Delete", " "].includes(event.key) || event.key.length === 1)) {
+          event.preventDefault();
+          const replacement = ["Backspace", "Delete", " "].includes(event.key) ? "" : event.key;
+          replaceFixedWidthSelection(start, els.tab.selectionEnd, replacement);
+        }
+        return;
+      }
+      if ((event.key === "@" || event.key === "%") && scaffoldBlockAtBlankLine(event.key)) {
+        event.preventDefault();
         return;
       }
       if (createRhythmRowAtCaret(event, start)) return;
@@ -4307,7 +4618,7 @@ Gsus2=300233`;
         name,
         artist,
         key: els.key.value || "G",
-        tab: els.tab.value,
+        tab: normalizeTabDocumentStructure(els.tab.value),
         shapes: els.shapes.value,
         bpm: Number(els.bpmNumber.value) || 60,
         beats: els.beats.value,
@@ -4356,7 +4667,7 @@ Gsus2=300233`;
       if (!document || typeof document.tab !== "string") return false;
       stopPlayback();
       clearPracticeRange();
-      els.tab.value = document.tab;
+      els.tab.value = normalizeTabDocumentStructure(document.tab);
       els.shapes.value = typeof document.shapes === "string" ? document.shapes : "";
       resizeShapeInput();
       els.scoreName.value = document.name || "";
@@ -4914,7 +5225,7 @@ Gsus2=300233`;
       const normalized = normalizeTabPadding(separationResult.text);
       const rhythmResult = canonicalizeRhythmLayers(normalized);
       const paddingResult = completeMeasurePadding(rhythmResult.text);
-      const validated = paddingResult.text;
+      const validated = normalizeTabDocumentStructure(paddingResult.text);
       if (validated !== els.tab.value) {
         els.tab.setRangeText(validated, 0, els.tab.value.length, "end");
         const nextCaret = Math.min(caret, validated.length);
@@ -4950,6 +5261,7 @@ Gsus2=300233`;
     };
     els.tab.addEventListener("input", () => {
       if (compositionSnapshot) return;
+      ensureTrailingEditorBlankLine();
       clearPracticeRange();
       if (playing) stopPlayback();
       updateDirtyState();
@@ -5156,7 +5468,7 @@ Gsus2=300233`;
       if (event.data?.type === "guitar-mate-tab-latency") hostLatencyMs = Math.max(-500, Math.min(1000, Number(event.data.value) || 0));
     });
 
-    els.tab.value = SAMPLE_TAB;
+    els.tab.value = normalizeTabDocumentStructure(SAMPLE_TAB);
     els.shapes.value = SAMPLE_SHAPES;
     resizeShapeInput();
     resetEditorHistory();
