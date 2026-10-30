@@ -82,7 +82,7 @@ test('cloud envelopes keep global scope separate from individual score selection
   assert.equal(read().tabPlayer,undefined);
 });
 
-test('score layout stays local and compact mobile lines never exceed 25 source columns', () => {
+test('score layout stays local and compact mobile lines group by rendered onset columns', () => {
   const code = html.slice(html.indexOf('    function scoreLineMeasureGroups('), html.indexOf('    function buildDisplaySystems()'));
   const ctx = vm.createContext({ window: { innerWidth: 527 }, els: { layout: { value: 'timed' } }, score: { measureColumnWidths: [8, 9, 10, 15, 7] } });
   vm.runInContext(code, ctx);
@@ -98,6 +98,27 @@ test('score layout stays local and compact mobile lines never exceed 25 source c
   assert.doesNotMatch(app, /score\.layout\s*\|\|\s*"compact"/);
 });
 
+test('chord labels stay anchored atomically and frets above 20 split into separate notes', () => {
+  const code = html.slice(html.indexOf('    function chordMarkers('), html.indexOf('    function barPositions('));
+  const ctx = vm.createContext({});
+  vm.runInContext(code, ctx);
+  assert.equal(vm.runInContext('rebuildChordLine("@ Cmaj7      G", 5, "insert")', ctx), '@ Cmaj7       G');
+  assert.equal(vm.runInContext('rebuildChordLine("@ Cmaj7      G", 2, "insert")', ctx), '@  Cmaj7      G');
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(fretTokenAt("20",0))', ctx)), { text: '20', length: 2, fret: 20 });
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(fretTokenAt("21",0))', ctx)), { text: '2', length: 1, fret: 2 });
+});
+
+test('validation separates adjacent notes while extending the preceding rhythm beam', () => {
+  const helpers = html.slice(html.indexOf('    function chordMarkers('), html.indexOf('    function barPositions('));
+  const separator = html.slice(html.indexOf('    function separateAdjacentFrettedNotes('), html.indexOf('    function applyTabTextConversion('));
+  const ctx = vm.createContext({});
+  vm.runInContext(helpers + separator, ctx);
+  ctx.input = '@C\n|5x5|\n|---|\n|---|\n|---|\n|---|\n|---|\n%-==';
+  const result = JSON.parse(vm.runInContext('JSON.stringify(separateAdjacentFrettedNotes(input))', ctx));
+  assert.equal(result.insertedColumns, 2);
+  assert.equal(result.text, '@C\n|5-x-5|\n|-----|\n|-----|\n|-----|\n|-----|\n|-----|\n%--===');
+});
+
 test('content validation fills leading empty beats with merged rests', () => {
   const code = html.slice(html.indexOf('    function restTokensForDuration('), html.indexOf('    function convertChordFingeringNumbersToX('));
   const ctx = vm.createContext({
@@ -110,6 +131,59 @@ test('content validation fills leading empty beats with merged rests', () => {
   ctx.input = '@\n|------0|\n|-------|\n|-------|\n|-------|\n|-------|\n|-------|';
   const output = vm.runInContext('completeMeasurePadding(input).text', ctx);
   assert.match(output, /\|R1R-+\|/);
+});
+
+test('content validation places the whole missing beat before the first note', () => {
+  const code = html.slice(html.indexOf('    function restTokensForDuration('), html.indexOf('    function convertChordFingeringNumbersToX('));
+  const ctx = vm.createContext({
+    els: { beats: { value: '4/4' } },
+    restDuration: token => ({ R2: 4, R1: 2, R: 1, r: .5, r1: .25, r2: .125, r3: .0625 })[token],
+    barPositions: row => [...row].flatMap((char, index) => char === '|' ? [index] : []),
+    rhythmInfo: column => ({ duration: [5,7,9,11,13,15].includes(column) ? .5 : 1 }),
+  });
+  vm.runInContext(code, ctx);
+  ctx.input = '@C\n|--------0-------|\n|----1-------1---|\n|------0---0---0-|\n|----------------|\n|----------------|\n|----------------|\n%    --- --- ---  ';
+  const output = vm.runInContext('completeMeasurePadding(input).text', ctx);
+  assert.match(output, /\|R---------------\|/);
+  assert.doesNotMatch(output, /\|[^\n]*=\|/);
+});
+
+test('replace paste overwrites content and only grows the measure by the missing width', () => {
+  const code = html.slice(html.indexOf('    function ensureRhythmRows('), html.indexOf('    let columnDragActive'));
+  const ctx = vm.createContext({
+    barPositions: row => [...row].flatMap((char, index) => char === '|' ? [index] : []),
+    rebuildChordLine: line => line,
+    tabRowType: (block, line) => line <= block.blockStart + 6 ? 'string' : 'rhythm',
+    tabRowFiller: (block, line) => line <= block.blockStart + 6 ? '-' : ' ',
+    tabBlockForLine: (lines, line) => ({ blockStart: 0, blockEnd: 7 }),
+    chordMarkers: () => [], chordLineFromMarkers: () => '@',
+  });
+  vm.runInContext(code, ctx);
+  ctx.lines = ['@C','|----35|','|------|','|------|','|------|','|------|','|------|','%      '];
+  vm.runInContext('ensurePasteCapacity(lines,0,7,3,5);writePasteRow(lines,0,1,3,"75777","replace")', ctx);
+  assert.equal(ctx.lines[1], '|--75777|');
+  assert.equal(ctx.lines[2].length, ctx.lines[1].length);
+});
+
+test('shift deletion removes the whole selected column range across the block', () => {
+  const code = html.slice(html.indexOf('    function selectedColumnRange('), html.indexOf('    function handleDashInput('));
+  const ctx = vm.createContext({
+    els: { tab: { value: '', selectionStart: 0, selectionEnd: 0 } },
+    normalizedColumnSelection: () => null,
+    textLocationAtOffset: () => ({}), tabBlockForLine: () => null,
+    barPositions: row => [...row].flatMap((char, index) => char === '|' ? [index] : []),
+    chordMarkers: () => [{ column: 1, name: 'C' }],
+    chordLineFromMarkers: () => '@C',
+    tabRowFiller: (block, line) => line <= block.blockStart + 6 ? '-' : ' ',
+    clearColumnSelection() {},
+    commitTabLines(value, lines) { ctx.result = lines; },
+  });
+  vm.runInContext(code, ctx);
+  ctx.lines = ['@C','|----35|','|------|','|------|','|------|','|------|','|------|','%      '];
+  ctx.block = { value: ctx.lines.join('\n'), lines: ctx.lines, blockStart: 0, blockEnd: 7, lineIndex: 1, column: 3 };
+  vm.runInContext('deleteTabColumnRange(block,3,7)', ctx);
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.result.slice(1, 7))), Array(6).fill('|--|'));
+  assert.equal(ctx.result[7], '%  ');
 });
 
 test('audio scheduling excludes notes outside selected measures and cuts audio at range end', async () => {
@@ -155,4 +229,14 @@ test('mobile beforeinput routes printable characters and deletion through struct
   assert.match(committed, /character === "\|"/);
   assert.match(committed, /character === " "/);
   assert.match(committed, /replaceTabCharacter\(caret, character\)/);
+  assert.match(committed, /rowType === "string"\) editTabColumn\("insert", "-"\)/);
+  assert.doesNotMatch(committed, /rowType === "rhythm"\) insertTabColumnWithCurrentValue/);
+  const desktopDash = html.slice(html.indexOf('    function handleDashInput('), html.indexOf('    function handleClearKey('));
+  assert.match(desktopDash, /tabRowType\(block\) === "string"/);
+  assert.doesNotMatch(desktopDash, /insertTabColumnWithCurrentValue/);
+  const mobileDelete = html.slice(html.indexOf('    function applyMobileDelete('), html.indexOf('    function handleEditorHistoryKey('));
+  assert.doesNotMatch(mobileDelete, /editTabColumn\("delete"\)/);
+  assert.match(html, /event\.altKey && event\.key\.toLowerCase\(\) === "v"/);
+  assert.match(html, /els\.tab\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(html, /deleteTabColumnRange\(block, selection\.left, selection\.right\)/);
 });

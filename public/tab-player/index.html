@@ -272,6 +272,8 @@
     .score-whole-note { stroke: #f4f3ec; stroke-width: 3; stroke-linecap: round; }
     .timing-issue-bg { fill: #351817; stroke: #ef6f63; stroke-width: .8; }
     .timing-issue-text { fill: #ff9b92; font-size: 9px; font-weight: 800; text-anchor: middle; dominant-baseline: central; }
+    .score-parse-issue-bg { fill: #352818; stroke: #e5b354; stroke-width: .8; }
+    .score-parse-issue-text { fill: #f4ca70; font-size: 8.5px; font-weight: 800; text-anchor: middle; dominant-baseline: central; }
     .score-rest { fill: #f4f3ec; font-family: "Segoe UI Symbol", "Noto Music", serif; font-size: 22px; text-anchor: middle; dominant-baseline: central; }
     .diagram-grid { stroke: #8c8f84; stroke-width: .8; }
     .diagram-dot { fill: #f3f0e5; }
@@ -723,9 +725,10 @@
 
     .current-score-button {
       display: block;
+      width: max-content;
       max-width: 100%;
       min-width: 0;
-      flex: 1 1 auto;
+      flex: 0 1 auto;
       padding: 7px 4px;
       border: 0;
       background: transparent;
@@ -735,9 +738,10 @@
 
     .current-score-button strong { display: block; min-width: 0; font-size: calc(15px * var(--host-font-scale)); line-height: 1.2; white-space: nowrap; }
     .current-score-button strong.wrap-title { white-space: normal; }
-    .current-score-button strong.wrap-title .score-title-separator { display: none; }
-    .current-score-button strong.wrap-title .score-name-part,
-    .current-score-button strong.wrap-title .score-artist-part { display: block; }
+    .current-score-button strong.wrap-title { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; max-height: 2.4em; }
+    .current-score-button strong.wrap-title .score-name-part { display: block; }
+    .current-score-button strong.wrap-title .score-title-separator { display: inline; }
+    .current-score-button strong.wrap-title .score-artist-part { display: inline; }
     .current-score-cluster, .score-save-actions { display: flex; min-width: 0; align-items: center; gap: 4px; }
     .current-score-cluster { flex: 1 1 auto; overflow: hidden; }
     .score-name-part, .score-artist-part { min-width: 0; }
@@ -955,11 +959,13 @@
       0% { color: #fff5d7; background: rgba(229,179,84,.34); box-shadow: 0 0 0 1px rgba(229,179,84,.7), 0 0 18px rgba(229,179,84,.7) !important; }
       100% { color: #e5b354; background: transparent; box-shadow: 0 0 0 0 rgba(229,179,84,0), 0 0 0 rgba(229,179,84,0) !important; }
     }
-    .scroll-mode-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; padding: 8px 12px 8px 28px; border-radius: 10px; background: color-mix(in srgb, var(--panel-2) 72%, transparent); }
+    .scroll-mode-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 13px; border: 1px solid var(--line); border-radius: 11px; background: var(--panel); }
     .scroll-mode-row[hidden] { display: none; }
-    .scroll-mode-row strong { color: var(--muted); font-size: calc(12px * var(--host-font-scale)); }
-    .scroll-mode-toggle { display: grid; grid-template-columns: repeat(2, 30px); padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); }
-    .scroll-mode-toggle button { min-height: 26px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: var(--lime); font-weight: 850; }
+    .scroll-mode-copy { display: grid; gap: 2px; }
+    .scroll-mode-copy strong { color: var(--text); font-size: calc(14px * var(--host-font-scale)); }
+    .scroll-mode-copy small { color: var(--muted); font-size: calc(11px * var(--host-font-scale)); }
+    .scroll-mode-toggle { display: grid; grid-template-columns: repeat(2, 30px); padding: 3px; border: 1px solid color-mix(in srgb, var(--lime) 45%, var(--line)); border-radius: 999px; background: color-mix(in srgb, var(--lime) 18%, var(--panel)); cursor: pointer; }
+    .scroll-mode-toggle button { min-height: 26px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: var(--lime); font-weight: 850; pointer-events: none; }
     .scroll-mode-toggle button.selected { background: var(--lime-dark); color: #fff; }
     .mobile-editor-tool { display: none; }
     .mobile-editor-tool:disabled { color: var(--muted); opacity: .38; }
@@ -1055,11 +1061,7 @@
       #tabInput { padding-right: calc(18px + 3ch); padding-bottom: 50px; }
     }
 
-    @media (max-width: 350px) {
-      .current-score-button { max-width: 100%; }
-      .score-title-separator { display: none; }
-      .score-artist-part { display: block; }
-    }
+    @media (max-width: 350px) { .current-score-button { max-width: 100%; } }
   </style>
 </head>
 <body>
@@ -1191,7 +1193,7 @@
         <div class="card-head">
           <div>
             <div class="card-title-row"><h2 class="card-title">谱面文本</h2><button class="info-circle-button" id="openTabGuideButton" type="button" aria-label="查看谱面文本编写规则" data-tooltip="谱面文本编写规则">i</button></div>
-            <div class="card-subtitle">“-”插整列，“|”插小节；按住 Alt 横向拖动可选择整列</div>
+            <div class="card-subtitle">“-”插整列，“|”插小节；Alt 拖选整列，Alt+V 插入所复制列</div>
           </div>
           <div class="head-actions">
             <button class="ghost-button" id="splitButton" type="button">分行</button>
@@ -1289,7 +1291,7 @@
         <label class="dialog-switch-row"><span><strong>准备音</strong><small>播放前提示三拍</small></span><input id="countInSheetToggle" type="checkbox"></label>
         <label class="dialog-switch-row"><span><strong>自动反复</strong><small>播完后从头继续</small></span><input id="loopSheetToggle" type="checkbox"></label>
         <label class="dialog-switch-row"><span><strong>滚动播放</strong><small>播放时自动跟随当前谱面</small></span><input id="autoScrollToggle" type="checkbox" checked></label>
-        <div class="scroll-mode-row" id="scrollModeRow"><strong>滚动模式</strong><div class="scroll-mode-toggle" id="scrollModeToggle"><button type="button" data-scroll-mode="smooth" class="selected">匀</button><button type="button" data-scroll-mode="jump">跳</button></div></div>
+        <div class="scroll-mode-row" id="scrollModeRow"><span class="scroll-mode-copy"><strong>滚动模式</strong><small id="scrollModeHelp">随播放进度连续跟随谱面</small></span><div class="scroll-mode-toggle" id="scrollModeToggle" role="switch" tabindex="0" aria-label="切换匀速或跳动滚动"><button type="button" data-scroll-mode="smooth" class="selected">匀</button><button type="button" data-scroll-mode="jump">跳</button></div></div>
         <label class="dialog-switch-row"><span><strong>分节训练</strong><small>点选起止小节，再点已选范围可取消</small></span><input id="sectionPracticeToggle" type="checkbox"></label>
         <p class="dialog-help" id="sectionPracticeHint" hidden>先点一小节即可单独练习，再点另一小节选择两者之间的范围；自动反复开启时重复所选范围。</p>
       </form>
@@ -1362,7 +1364,7 @@
           <div><strong>节奏</strong><br>第一条 <code>%</code> 行：空位为四分音符，<code>-</code> 为八分，<code>=</code> 为十六分，<code>.</code> 为附点。需要 32 分音符时，在第二条 <code>%</code> 行同列补 <code>-</code>。</div>
           <div><strong>演奏符号</strong><br><code>/</code>、<code>\</code> 滑音；<code>*</code> 表示只显示动作但不发音，可写在滑音、延音的终点；<code>u/d</code> 上/下扫弦、<code>w/W</code> 正/反向琶音，必须写在所拨音符左侧一列才会生效；<code>R/r</code> 休止；独立或紧跟音符的 <code>=</code> 补满本小节剩余时值。</div>
           <div><strong>三连音</strong><br>三个音用 <code>~</code> 连写，并在第二条节奏行末音下方写 <code>33</code>，按原总时值均分。</div>
-          <div><strong>快捷编辑</strong><br>输入 <code>-</code> 插入整列，输入 <code>|</code> 插入小节。<br><code>Shift + Backspace</code> 删除光标前一整列；<code>Shift + Delete</code> 删除光标所在整列。<br>按住 <code>Alt</code> 横向拖动可选择整列；<code>Ctrl / ⌘ + Z</code> 撤销，<code>Ctrl / ⌘ + Shift + Z</code> 重做。“分行/合并”用于调整长谱排版。</div>
+          <div><strong>快捷编辑</strong><br>输入 <code>-</code> 插入整列，输入 <code>|</code> 插入小节。<br><code>Shift + Backspace</code> / <code>Shift + Delete</code> 删除光标列或选中的整列范围。<br>按住 <code>Alt</code> 横向拖动可选择整列；<code>Ctrl / ⌘ + V</code> 覆盖粘贴，<code>Alt + V</code> 插入所复制的整列；<code>Ctrl / ⌘ + Z</code> 撤销，<code>Ctrl / ⌘ + Shift + Z</code> 重做。“分行/合并”用于调整长谱排版。</div>
         </div>
       </form>
     </dialog>
@@ -1436,6 +1438,7 @@ Gsus2=300233`;
       autoScroll: document.querySelector("#autoScrollToggle"),
       scrollModeRow: document.querySelector("#scrollModeRow"),
       scrollModeToggle: document.querySelector("#scrollModeToggle"),
+      scrollModeHelp: document.querySelector("#scrollModeHelp"),
       loop: document.querySelector("#loopToggle"),
       scoreSvg: document.querySelector("#scoreSvg"),
       scoreHint: document.querySelector("#scoreHint"),
@@ -1702,6 +1705,36 @@ Gsus2=300233`;
       return current;
     }
 
+    function fretTokenAt(row, column) {
+      const tail = row.slice(column);
+      const harmonic = tail.match(/^<(\d+)>/);
+      if (harmonic) return { text: harmonic[0], length: harmonic[0].length, fret: Number(harmonic[1]) };
+      if (/^[xX]/.test(tail)) return { text: tail[0], length: 1, fret: null };
+      const digits = tail.match(/^\d+/)?.[0] || "";
+      if (!digits) return null;
+      const twoDigits = digits.slice(0, 2);
+      const value = Number(twoDigits);
+      const length = twoDigits.length === 2 && value >= 10 && value <= 20 ? 2 : 1;
+      return { text: digits.slice(0, length), length, fret: Number(digits.slice(0, length)) };
+    }
+
+    function chordLineFromMarkers(markers, minimumWidth = 1) {
+      const width = Math.max(1, minimumWidth, ...markers.map(marker => marker.column + marker.name.length));
+      const chars = Array(width).fill(" ");
+      chars[0] = "@";
+      markers.forEach(marker => [...marker.name].forEach((char, offset) => { chars[marker.column + offset] = char; }));
+      return chars.join("").trimEnd();
+    }
+
+    function rebuildChordLine(line, column, mode) {
+      const markers = chordMarkers(line).map(marker => ({ ...marker }));
+      markers.forEach(marker => {
+        if (mode === "insert" && marker.column >= column) marker.column += 1;
+        if (mode === "delete" && marker.column > column) marker.column -= 1;
+      });
+      return chordLineFromMarkers(markers, line.length + (mode === "insert" ? 1 : -1));
+    }
+
     function barPositions(row) {
       const bars = [];
       for (let i = 0; i < row.length; i++) if (row[i] === "|") bars.push(i);
@@ -1963,14 +1996,7 @@ Gsus2=300233`;
           const lastEnd = ordered.at(-1)?.end ?? left + 1;
           const leadingGap = Math.max(0, firstColumn - left - 1);
           const trailingGap = Math.max(0, right - lastEnd);
-          let leadingDuration = 0;
-          if (leadingGap > 0) {
-            const gapTotal = leadingGap + trailingGap;
-            leadingDuration = gapTotal ? Math.round(deficit * leadingGap / gapTotal * 16) / 16 : deficit;
-            if (!trailingGap) leadingDuration = deficit;
-          }
-
-          const restTokens = restTokensForDuration(leadingDuration, Math.max(0, firstColumn - left - 1));
+          const restTokens = leadingGap > 0 ? restTokensForDuration(deficit, leadingGap) : [];
           const restText = restTokens.join("");
           let insertedRestDuration = 0;
           if (restText && restText.length <= Math.max(0, firstColumn - left - 1)) {
@@ -2021,16 +2047,16 @@ Gsus2=300233`;
           for (let column = 0; column < rebuilt.length; column++) {
             const insideHarmonic = rebuilt.lastIndexOf("<", column) > rebuilt.lastIndexOf(">", column);
             if (!/\d/.test(rebuilt[column]) || insideHarmonic) continue;
-            const match = rebuilt.slice(column).match(/^\d+/);
-            if (!match) continue;
+            const token = fretTokenAt(rebuilt, column);
+            if (!token || token.fret == null) continue;
             const chord = chordAt(markers, column);
             const shape = shapes.get(chord);
             const expectedFret = shape?.[5 - stringIndex];
-            if (expectedFret != null && Number(match[0]) === expectedFret) {
-              rebuilt = rebuilt.slice(0, column) + "x" + "-".repeat(match[0].length - 1) + rebuilt.slice(column + match[0].length);
+            if (expectedFret != null && token.fret === expectedFret) {
+              rebuilt = rebuilt.slice(0, column) + "x" + "-".repeat(token.length - 1) + rebuilt.slice(column + token.length);
               converted += 1;
             }
-            column += match[0].length - 1;
+            column += token.length - 1;
           }
           lines[lineIndex] = rebuilt;
         }
@@ -2071,6 +2097,43 @@ Gsus2=300233`;
         }
       }
       return { text: lines.join("\n"), converted, skipped };
+    }
+
+    function separateAdjacentFrettedNotes(rawText) {
+      const lines = rawText.replace(/\r/g, "").split("\n");
+      let insertedColumns = 0;
+      for (let blockStart = 0; blockStart < lines.length; blockStart++) {
+        if (!lines[blockStart].trimStart().startsWith("@")) continue;
+        const rows = lines.slice(blockStart + 1, blockStart + 7);
+        if (rows.length < 6) continue;
+        let blockEnd = blockStart + 6;
+        while (blockEnd + 1 < lines.length && lines[blockEnd + 1].trimStart().startsWith("%")) blockEnd += 1;
+        const insertAt = new Set();
+        rows.forEach(row => {
+          for (let column = 0; column < row.length;) {
+            const token = fretTokenAt(row, column);
+            if (!token) { column += 1; continue; }
+            const nextColumn = column + token.length;
+            if (fretTokenAt(row, nextColumn)) insertAt.add(nextColumn);
+            column = nextColumn;
+          }
+        });
+        [...insertAt].sort((a, b) => b - a).forEach(column => {
+          for (let lineIndex = blockStart; lineIndex <= blockEnd; lineIndex++) {
+            if (lineIndex === blockStart) {
+              lines[lineIndex] = rebuildChordLine(lines[lineIndex], column, "insert");
+              continue;
+            }
+            const isString = lineIndex <= blockStart + 6;
+            const filler = isString ? "-" : ((lines[lineIndex][column - 1] || " ") === "|" ? " " : (lines[lineIndex][column - 1] || " "));
+            const padded = lines[lineIndex].padEnd(column, isString ? "-" : " ");
+            lines[lineIndex] = padded.slice(0, column) + filler + padded.slice(column);
+          }
+          insertedColumns += 1;
+        });
+        blockStart = blockEnd;
+      }
+      return { text: lines.join("\n"), insertedColumns };
     }
 
     function applyTabTextConversion(result, successLabel) {
@@ -2198,6 +2261,7 @@ Gsus2=300233`;
       const usedChords = new Set();
       const warnings = [...shapeResult.errors];
       const timingIssues = [];
+      const previewIssues = [];
       let totalBeats = 0;
       let blocks = 0;
       let maxFret = 0;
@@ -2236,6 +2300,7 @@ Gsus2=300233`;
         const blockEvents = [];
         const restsByColumn = new Map();
         const silentColumns = new Map();
+        const unresolvedColumns = new Map();
         const standaloneWholeNoteColumns = new Set();
         for (let stringIndex = 0; stringIndex < 6; stringIndex++) {
           const row = padded[stringIndex];
@@ -2274,19 +2339,24 @@ Gsus2=300233`;
               const shape = shapeResult.shapes.get(chord);
               if (!shape) {
                 warnings.push(`缺少和弦 ${chord || "（未标注）"} 的指形，无法解析 ${STRING_NAMES[stringIndex]} 的 x。`);
+                if (!unresolvedColumns.has(column)) unresolvedColumns.set(column, []);
+                unresolvedColumns.get(column).push({ stringIndex, label: chord ? `缺${chord}` : "缺和弦" });
                 continue;
               }
               const shapeFret = shape[5 - stringIndex];
               if (shapeFret == null) {
                 warnings.push(`${chord} 的 ${STRING_NAMES[stringIndex]} 在指形中不发音，但谱面使用了 x。`);
+                if (!unresolvedColumns.has(column)) unresolvedColumns.set(column, []);
+                unresolvedColumns.get(column).push({ stringIndex, label: "此弦不发音" });
                 continue;
               }
               fret = shapeFret;
               sourceType = "x";
             } else {
-              const numberMatch = tail.match(/^\d+/);
-              fret = Number(numberMatch[0]);
-              tokenLength = numberMatch[0].length;
+              const numberToken = fretTokenAt(row, column);
+              if (!numberToken) continue;
+              fret = numberToken.fret;
+              tokenLength = numberToken.length;
             }
 
             const rawBetween = previousNote ? row.slice(previousNote.tokenEnd, column) : "";
@@ -2333,7 +2403,7 @@ Gsus2=300233`;
         }
 
         const blockRests = [...restsByColumn.values()];
-        const onsetColumns = [...new Set([...blockEvents.map(event => event.column), ...blockRests.map(rest => rest.column), ...silentColumns.keys(), ...standaloneWholeNoteColumns])].sort((a, b) => a - b);
+        const onsetColumns = [...new Set([...blockEvents.map(event => event.column), ...blockRests.map(rest => rest.column), ...silentColumns.keys(), ...unresolvedColumns.keys(), ...standaloneWholeNoteColumns])].sort((a, b) => a - b);
         const beatByColumn = new Map();
         const infoByColumn = new Map();
         const bars = barPositions(padded[0]);
@@ -2341,8 +2411,8 @@ Gsus2=300233`;
         for (let measureIndex = 0; measureIndex < sourceMeasureCount; measureIndex++) {
           const leftBar = bars[measureIndex];
           const rightBar = bars[measureIndex + 1];
-          measureColumnWidths.push(Math.max(1, rightBar - leftBar));
           const measureColumns = onsetColumns.filter(column => column > leftBar && column < rightBar);
+          measureColumnWidths.push(Math.max(1, measureColumns.length));
           const measureInfos = measureColumns.map(column => {
             const rest = restsByColumn.get(column);
             const silent = silentColumns.has(column);
@@ -2458,6 +2528,10 @@ Gsus2=300233`;
             systemGlobalIndex: systemIndex,
           });
         });
+        unresolvedColumns.forEach((issues, column) => {
+          const beat = totalBeats + beatByColumn.get(column);
+          issues.forEach(issue => previewIssues.push({ ...issue, beat, column, systemGlobalIndex: systemIndex }));
+        });
 
         const first = onsetColumns[0];
         const systemMarkers = first == null ? [] : markers.map(marker => {
@@ -2490,7 +2564,13 @@ Gsus2=300233`;
       if (!events.length && !rests.length) dedupedWarnings.push("没有解析到音符或休止符。");
 
       const measures = totalBeats / beatsPerMeasure;
-      score = { events, rests, silentEvents, totalBeats, measures, maxFret, usedChords: [...usedChords], shapes: shapeResult.shapes, warnings: dedupedWarnings, timingIssues, systems, measureColumnWidths, beatsPerMeasure, meterLabel };
+      const physicalCapo = Math.max(0, getCapo());
+      const physicalMaxFret = maxFret + physicalCapo;
+      if (physicalMaxFret > 20) {
+        dedupedWarnings.push(`琴颈范围提醒：加上变调夹后实际最高为 ${physicalMaxFret} 品，可能超出当前吉他的有效品位。`);
+        previewIssues.unshift({ global: true, label: `实际最高${physicalMaxFret}品`, beat: 0, stringIndex: 0 });
+      }
+      score = { events, rests, silentEvents, totalBeats, measures, maxFret: physicalMaxFret, writtenMaxFret: maxFret, usedChords: [...usedChords], shapes: shapeResult.shapes, warnings: dedupedWarnings, timingIssues, previewIssues, systems, measureColumnWidths, beatsPerMeasure, meterLabel };
       if (practiceRange && practiceRange[1] >= Math.ceil(measures)) clearPracticeRange();
       updateSummary();
       renderScore();
@@ -2680,7 +2760,7 @@ Gsus2=300233`;
       const displaySystems = buildDisplaySystems();
       const x0 = width <= 640 ? 24 : 34;
       const x1 = width - (width <= 640 ? 14 : 24);
-      let verticalCursor = 12;
+      let verticalCursor = 12 + ((score.previewIssues || []).some(issue => issue.global) ? 18 : 0);
       displaySystems.forEach(system => {
         const hasChordRow = system.markers.length > 0;
         system.stringTop = verticalCursor + (hasChordRow ? 78 : 24);
@@ -2734,6 +2814,17 @@ Gsus2=300233`;
           svg += `<rect class="timing-issue-bg" x="${centerX - badgeWidth / 2}" y="${stringTop - 19}" width="${badgeWidth}" height="13" rx="6.5"/>`;
           svg += `<text class="timing-issue-text" x="${centerX}" y="${stringTop - 12.5}">${label}</text>`;
         }
+
+        const parseIssues = (score.previewIssues || []).filter(issue => issue.global ? systemIndex === 0 : beatBelongsToSystem(issue.beat, system));
+        parseIssues.forEach((issue, issueIndex) => {
+          const label = escapeHtml(issue.label);
+          const badgeWidth = Math.max(42, Math.min(82, 14 + [...issue.label].length * 8));
+          const rawX = issue.global ? x0 + badgeWidth / 2 : xForBeat(issue.beat);
+          const x = Math.max(x0 + badgeWidth / 2, Math.min(systemRight - badgeWidth / 2, rawX));
+          const y = issue.global ? stringTop - 33 : stringTop + issue.stringIndex * 11 - 10 - (issueIndex % 2) * 14;
+          svg += `<rect class="score-parse-issue-bg" x="${x - badgeWidth / 2}" y="${y - 6.5}" width="${badgeWidth}" height="13" rx="6.5"/>`;
+          svg += `<text class="score-parse-issue-text" x="${x}" y="${y}">${label}</text>`;
+        });
 
         system.markers.forEach(marker => {
           const diagramHalfWidth = 19;
@@ -3359,7 +3450,7 @@ Gsus2=300233`;
       }
       const resumeBeat = pausedBeat;
       const parsed = parseScore({ reset: false });
-      if (!parsed.events.length || parsed.warnings.some(w => w.startsWith("缺少和弦") || w.includes("无法解析") || w.includes("没有找到"))) return;
+      if (!parsed.events.length) return;
       const bounds = practiceBounds();
       pausedBeat = Math.max(bounds.start, Math.min(resumeBeat, bounds.end));
       if (pausedBeat >= bounds.end - .001) {
@@ -3477,9 +3568,13 @@ Gsus2=300233`;
 
     function editTabColumn(mode, insertedChar = "-") {
       const block = tabBlockAtCaret();
-      if (!block) return false;
+      if (!block || tabRowType(block) !== "string") return false;
       const lines = [...block.lines];
       for (let lineIndex = block.blockStart; lineIndex <= block.blockEnd; lineIndex++) {
+        if (lineIndex === block.blockStart) {
+          lines[lineIndex] = rebuildChordLine(lines[lineIndex], block.column, mode);
+          continue;
+        }
         const isStringRow = tabRowType(block, lineIndex) === "string";
         const filler = tabRowFiller(block, lineIndex);
         let line = lines[lineIndex].padEnd(block.column, filler);
@@ -3498,9 +3593,13 @@ Gsus2=300233`;
 
     function insertTabColumnWithCurrentValue(char) {
       const block = tabBlockAtCaret();
-      if (!block || tabRowType(block) === "chord") return false;
+      if (!block || tabRowType(block) !== "string") return false;
       const lines = [...block.lines];
       for (let lineIndex = block.blockStart; lineIndex <= block.blockEnd; lineIndex++) {
+        if (lineIndex === block.blockStart) {
+          lines[lineIndex] = rebuildChordLine(lines[lineIndex], block.column, "insert");
+          continue;
+        }
         const filler = tabRowFiller(block, lineIndex);
         const inserted = lineIndex === block.lineIndex ? char : filler;
         const line = lines[lineIndex].padEnd(block.column, filler);
@@ -3669,57 +3768,177 @@ Gsus2=300233`;
     }
 
     function columnSelectionText() {
-      const selection = normalizedColumnSelection();
-      if (!selection || selection.right <= selection.left) return "";
-      const lines = els.tab.value.split("\n");
-      return lines.slice(selection.top, selection.bottom + 1)
-        .map(line => line.slice(selection.left, selection.right).padEnd(selection.right - selection.left, " "))
-        .join("\n");
+      return columnSelectionPayload()?.text || "";
     }
 
-    function pasteColumns(text, replaceSelection) {
-      const sourceRows = text.replace(/\r/g, "").split("\n");
+    function columnSelectionPayload() {
+      const selection = normalizedColumnSelection();
+      if (!selection || selection.right <= selection.left) return null;
       const lines = els.tab.value.split("\n");
-      const sourceWidth = Math.max(0, ...sourceRows.map(row => row.length));
-      let top;
-      let left;
-      let bottom;
-      let replaceWidth;
-      if (replaceSelection) {
-        const selection = normalizedColumnSelection();
-        if (!selection) return false;
-        ({ top, bottom, left } = selection);
-        replaceWidth = selection.right - selection.left;
-      } else {
-        const caretOffset = els.tab.selectionStart;
-        const before = els.tab.value.slice(0, caretOffset).split("\n");
-        const caretLine = before.length - 1;
-        const bounds = tabBlockForLine(lines, caretLine);
-        if (!bounds) return false;
-        ({ blockStart: top, blockEnd: bottom } = bounds);
-        left = before.at(-1).length;
-        replaceWidth = sourceWidth;
+      const rows = lines.slice(selection.top, selection.bottom + 1)
+        .map((line, offset) => {
+          const lineIndex = selection.top + offset;
+          const bounds = tabBlockForLine(lines, lineIndex);
+          const width = selection.right - selection.left;
+          let text;
+          if (bounds && lineIndex === bounds.blockStart) {
+            const chars = Array(width).fill(" ");
+            chordMarkers(line).forEach(marker => {
+              if (marker.column < selection.left || marker.column + marker.name.length > selection.right) return;
+              [...marker.name].forEach((char, index) => { chars[marker.column - selection.left + index] = char; });
+            });
+            text = chars.join("");
+          } else {
+            text = line.slice(selection.left, selection.right).padEnd(width, " ");
+          }
+          const role = !bounds ? "outside" : lineIndex === bounds.blockStart ? "chord" : lineIndex <= bounds.blockStart + 6 ? `string:${lineIndex - bounds.blockStart - 1}` : `rhythm:${lineIndex - bounds.blockStart - 7}`;
+          return { role, text };
+        });
+      return { text: rows.map(row => row.text).join("\n"), width: selection.right - selection.left, rows };
+    }
+
+    function clearColumnSelectionContents() {
+      const selection = normalizedColumnSelection();
+      if (!selection || selection.right <= selection.left) return false;
+      const originalValue = els.tab.value;
+      const lines = originalValue.split("\n");
+      for (let lineIndex = selection.top; lineIndex <= selection.bottom; lineIndex++) {
+        const bounds = tabBlockForLine(lines, lineIndex);
+        if (!bounds || lineIndex === bounds.blockStart) continue;
+        const block = { ...bounds, lineIndex };
+        const filler = tabRowFiller(block, lineIndex);
+        const chars = [...lines[lineIndex]];
+        for (let column = selection.left; column < Math.min(selection.right, chars.length); column++) {
+          if (chars[column] !== "|") chars[column] = filler;
+        }
+        lines[lineIndex] = chars.join("");
       }
-      const blockWidth = Math.max(...lines.slice(top + 1, Math.min(bottom + 1, top + 7)).map(line => line.length));
-      const writableWidth = Math.max(0, Math.min(replaceWidth, blockWidth - left));
-      if (!writableWidth) return false;
-      const targetCount = bottom - top + 1;
-      const targetBlock = { blockStart: top, blockEnd: bottom };
-      for (let rowIndex = 0; rowIndex < targetCount; rowIndex++) {
-        const lineIndex = top + rowIndex;
-        const filler = tabRowFiller(targetBlock, lineIndex);
-        const padded = lines[lineIndex].padEnd(blockWidth, filler);
-        const source = (sourceRows[rowIndex] ?? filler.repeat(sourceWidth)).padEnd(sourceWidth, filler).slice(0, writableWidth);
-        lines[lineIndex] = padded.slice(0, left) + source + padded.slice(left + writableWidth);
+      commitTabLines(originalValue, lines, selection.top, selection.left);
+      columnSelection = { startLine: selection.top, endLine: selection.bottom, startColumn: selection.left, endColumn: selection.right };
+      renderColumnSelection();
+      return true;
+    }
+
+    function ensureRhythmRows(lines, top, requiredCount) {
+      let bottom = top + 6;
+      while (bottom + 1 < lines.length && lines[bottom + 1].trimStart().startsWith("%")) bottom += 1;
+      const currentCount = Math.max(0, bottom - top - 6);
+      const width = Math.max(...lines.slice(top + 1, top + 7).map(line => line.length));
+      for (let index = currentCount; index < requiredCount; index++) {
+        lines.splice(top + 7 + index, 0, `%${" ".repeat(Math.max(0, width - 1))}`);
+        bottom += 1;
       }
+      return bottom;
+    }
+
+    function insertColumnsIntoBlock(lines, top, bottom, column, count, continueRhythm = false) {
+      const block = { blockStart: top, blockEnd: bottom };
+      for (let repeat = 0; repeat < count; repeat++) {
+        for (let lineIndex = top; lineIndex <= bottom; lineIndex++) {
+          if (lineIndex === top) {
+            lines[lineIndex] = rebuildChordLine(lines[lineIndex], column, "insert");
+            continue;
+          }
+          const isString = tabRowType(block, lineIndex) === "string";
+          const previous = lines[lineIndex][column - 1] || " ";
+          const filler = isString ? "-" : (continueRhythm && previous !== "|" ? previous : " ");
+          const padded = lines[lineIndex].padEnd(column, isString ? "-" : " ");
+          lines[lineIndex] = padded.slice(0, column) + filler + padded.slice(column);
+        }
+      }
+    }
+
+    function ensurePasteCapacity(lines, top, bottom, left, width) {
+      const bars = barPositions(lines[top + 1] || "");
+      const rightBar = bars.find(bar => bar >= left) ?? bars.at(-1);
+      if (rightBar == null) return { bottom, rightBar: left + width };
+      const missing = Math.max(0, left + width - rightBar);
+      if (missing) insertColumnsIntoBlock(lines, top, bottom, rightBar, missing, false);
+      return { bottom, rightBar: rightBar + missing };
+    }
+
+    function targetLineForRole(top, role, fallback) {
+      if (role === "chord") return top;
+      if (role.startsWith("string:")) return top + 1 + Number(role.split(":")[1]);
+      if (role.startsWith("rhythm:")) return top + 7 + Number(role.split(":")[1]);
+      return fallback;
+    }
+
+    function writePasteRow(lines, top, lineIndex, left, source, mode) {
+      if (lineIndex === top) {
+        const width = source.length;
+        const kept = chordMarkers(lines[lineIndex]).filter(marker => mode === "insert" || marker.column < left || marker.column >= left + width);
+        const incoming = chordMarkers(source).filter(marker => marker.column + marker.name.length <= width).map(marker => ({ name: marker.name, column: left + marker.column }));
+        lines[lineIndex] = chordLineFromMarkers([...kept, ...incoming].sort((a, b) => a.column - b.column), lines[lineIndex].length);
+        return;
+      }
+      const bounds = tabBlockForLine(lines, lineIndex);
+      if (!bounds) return;
+      const filler = lineIndex <= top + 6 ? "-" : " ";
+      const padded = lines[lineIndex].padEnd(left + source.length, filler);
+      const target = [...padded];
+      [...source].forEach((char, index) => {
+        const column = left + index;
+        if (mode === "replace" && target[column] === "|") return;
+        if (char === "|" && mode === "replace") return;
+        target[column] = char;
+      });
+      lines[lineIndex] = target.join("");
+    }
+
+    function commitPaste(lines, top, bottom, left, width, keepColumnSelection, caretLine = top + 1) {
       const nextValue = lines.join("\n");
       els.tab.setRangeText(nextValue, 0, els.tab.value.length, "end");
-      const nextOffset = offsetForLineColumn(lines, top, left + writableWidth);
+      const nextOffset = offsetForLineColumn(lines, Math.min(bottom, caretLine), left + width);
       els.tab.setSelectionRange(nextOffset, nextOffset);
-      columnSelection = { startLine: top, endLine: bottom, startColumn: left, endColumn: left + writableWidth };
+      columnSelection = keepColumnSelection ? { startLine: top, endLine: bottom, startColumn: left, endColumn: left + width } : null;
       renderColumnSelection();
       els.tab.dispatchEvent(new Event("input", { bubbles: true }));
       return true;
+    }
+
+    function pasteColumnPayload(payload, mode = "replace") {
+      if (!payload?.width) return false;
+      const original = els.tab.value;
+      const location = textLocationAtOffset(original, els.tab.selectionStart);
+      const bounds = tabBlockForLine(location.lines, location.lineIndex);
+      if (!bounds) return false;
+      const lines = [...location.lines];
+      const selection = normalizedColumnSelection();
+      const left = selection ? selection.left : location.column;
+      const rhythmCount = payload.rows.filter(row => row.role.startsWith("rhythm:")).length;
+      let bottom = ensureRhythmRows(lines, bounds.blockStart, rhythmCount);
+      if (mode === "insert") insertColumnsIntoBlock(lines, bounds.blockStart, bottom, left, payload.width, true);
+      else ensurePasteCapacity(lines, bounds.blockStart, bottom, left, payload.width);
+      payload.rows.forEach((row, index) => {
+        const lineIndex = targetLineForRole(bounds.blockStart, row.role, bounds.blockStart + index);
+        writePasteRow(lines, bounds.blockStart, lineIndex, left, row.text, mode);
+      });
+      return commitPaste(lines, bounds.blockStart, bottom, left, payload.width, true, location.lineIndex);
+    }
+
+    function pastePlainText(text) {
+      const original = els.tab.value;
+      const location = textLocationAtOffset(original, els.tab.selectionStart);
+      const bounds = tabBlockForLine(location.lines, location.lineIndex);
+      if (!bounds) return false;
+      const sourceRows = text.replace(/\r/g, "").split("\n");
+      const lines = [...location.lines];
+      const left = location.column;
+      const sourceRhythmCount = sourceRows.filter(row => row.trimStart().startsWith("%")).length;
+      let bottom = ensureRhythmRows(lines, bounds.blockStart, Math.max(0, bounds.blockEnd - bounds.blockStart - 6, sourceRhythmCount));
+      const width = Math.max(0, ...sourceRows.map(row => row.length));
+      ensurePasteCapacity(lines, bounds.blockStart, bottom, left, width);
+      let rhythmIndex = 0;
+      let lastTargetLine = location.lineIndex;
+      sourceRows.forEach((source, index) => {
+        let lineIndex = location.lineIndex + index;
+        if (source.trimStart().startsWith("%")) lineIndex = bounds.blockStart + 7 + rhythmIndex++;
+        if (lineIndex > bottom) return;
+        writePasteRow(lines, bounds.blockStart, lineIndex, left, source, "replace");
+        lastTargetLine = lineIndex;
+      });
+      return commitPaste(lines, bounds.blockStart, bottom, left, width, false, lastTargetLine);
     }
 
     let columnDragActive = false;
@@ -3733,6 +3952,9 @@ Gsus2=300233`;
       const lines = els.tab.value.split("\n");
       const bounds = tabBlockForLine(lines, point.line);
       if (!bounds) return;
+      els.tab.focus({ preventScroll: true });
+      const caret = offsetForLineColumn(lines, point.line, point.column);
+      els.tab.setSelectionRange(caret, caret);
       columnSelection = { startLine: bounds.blockStart, endLine: bounds.blockEnd, startColumn: point.column, endColumn: point.column };
       columnDragActive = true;
       els.tab.setPointerCapture?.(event.pointerId);
@@ -3750,20 +3972,29 @@ Gsus2=300233`;
     els.tab.addEventListener("scroll", renderColumnSelection);
 
     els.tab.addEventListener("copy", event => {
-      const text = columnSelectionText();
-      if (!text) return;
+      const payload = columnSelectionPayload();
+      if (!payload) { lastColumnClipboard = null; return; }
       event.preventDefault();
-      event.clipboardData.setData("text/plain", text);
-      lastColumnClipboard = text;
+      event.clipboardData.setData("text/plain", payload.text);
+      lastColumnClipboard = payload;
+    });
+    els.tab.addEventListener("cut", event => {
+      const payload = columnSelectionPayload();
+      if (!payload) { lastColumnClipboard = null; return; }
+      event.preventDefault();
+      event.clipboardData.setData("text/plain", payload.text);
+      lastColumnClipboard = payload;
+      clearColumnSelectionContents();
     });
     els.tab.addEventListener("paste", event => {
       const text = event.clipboardData.getData("text/plain");
-      const replaceSelection = Boolean(normalizedColumnSelection());
-      const isColumnPaste = replaceSelection || (lastColumnClipboard != null && text === lastColumnClipboard);
-      if (!isColumnPaste) return;
       event.preventDefault();
-      pasteColumns(text, replaceSelection);
+      if (lastColumnClipboard?.text === text) pasteColumnPayload(lastColumnClipboard, "replace");
+      else pastePlainText(text);
     });
+    document.addEventListener("copy", event => {
+      if (event.target !== els.tab || !normalizedColumnSelection()) lastColumnClipboard = null;
+    }, true);
     els.tab.addEventListener("beforeinput", event => {
       if (event.inputType === "historyUndo" || event.inputType === "historyRedo") {
         event.preventDefault();
@@ -3832,18 +4063,14 @@ Gsus2=300233`;
         const rowType = tabRowType(block);
         const current = els.tab.value[caret];
         if (character === "-" && block) {
-          if (rowType === "rhythm" && current === " ") replaceTabCharacter(caret, "-");
-          else if (rowType === "rhythm") insertTabColumnWithCurrentValue("-");
-          else editTabColumn("insert", "-");
+          if (rowType === "string") editTabColumn("insert", "-");
+          else replaceTabCharacter(caret, "-");
         } else if (character === "|" && block) {
-          editTabColumn("insert", "|");
+          if (rowType === "string") editTabColumn("insert", "|");
+          else replaceTabCharacter(caret, "|");
         } else if (character === " " && block) {
           const filler = tabRowFiller(block);
-          if (current === "|") {
-            editTabColumn("delete");
-            const next = Math.min(els.tab.selectionStart + 1, els.tab.value.length);
-            els.tab.setSelectionRange(next, next);
-          } else {
+          if (current !== "|") {
             clearTabCell(caret, caret + 1, filler);
           }
         } else if (current === "|" && rowType === "string") {
@@ -3869,16 +4096,12 @@ Gsus2=300233`;
       const filler = tabRowFiller(block);
       if (direction === "backward") {
         if (block.column <= 0) return;
-        if (els.tab.value[start - 1] === "|") {
-          els.tab.setSelectionRange(start - 1, start - 1);
-          editTabColumn("delete");
-        } else {
+        if (els.tab.value[start - 1] !== "|") {
           clearTabCell(start - 1, start - 1, filler);
         }
         return;
       }
-      if (els.tab.value[start] === "|") editTabColumn("delete");
-      else clearTabCell(start, start, filler);
+      if (els.tab.value[start] !== "|") clearTabCell(start, start, filler);
     }
 
     function handleEditorHistoryKey(event) {
@@ -3910,14 +4133,49 @@ Gsus2=300233`;
       return true;
     }
 
-    function handleWholeColumnDelete(event, block, start) {
+    function selectedColumnRange(block, start, end) {
+      const columnRange = normalizedColumnSelection();
+      if (columnRange) return { left: columnRange.left, right: columnRange.right };
+      if (start === end) return null;
+      const startLocation = textLocationAtOffset(els.tab.value, start);
+      const endLocation = textLocationAtOffset(els.tab.value, end);
+      const startBounds = tabBlockForLine(startLocation.lines, startLocation.lineIndex);
+      const endBounds = tabBlockForLine(endLocation.lines, endLocation.lineIndex);
+      if (!startBounds || !endBounds || startBounds.blockStart !== endBounds.blockStart) return null;
+      return { left: Math.min(startLocation.column, endLocation.column), right: Math.max(startLocation.column, endLocation.column) };
+    }
+
+    function deleteTabColumnRange(block, requestedLeft, requestedRight) {
+      if (!block || requestedRight <= requestedLeft) return false;
+      const lines = [...block.lines];
+      const bars = barPositions(lines[block.blockStart + 1] || "");
+      const left = Math.max(requestedLeft, (bars[0] ?? 0) + 1);
+      const right = Math.min(requestedRight, bars.at(-1) ?? requestedRight);
+      if (right <= left) return false;
+      const count = right - left;
+      const markers = chordMarkers(lines[block.blockStart])
+        .filter(marker => marker.column < left || marker.column >= right)
+        .map(marker => ({ ...marker, column: marker.column >= right ? marker.column - count : marker.column }));
+      lines[block.blockStart] = chordLineFromMarkers(markers, Math.max(1, lines[block.blockStart].length - count));
+      for (let lineIndex = block.blockStart + 1; lineIndex <= block.blockEnd; lineIndex++) {
+        const filler = tabRowFiller(block, lineIndex);
+        const padded = lines[lineIndex].padEnd(right, filler);
+        lines[lineIndex] = padded.slice(0, left) + padded.slice(right);
+      }
+      clearColumnSelection();
+      commitTabLines(block.value, lines, block.lineIndex, left);
+      return true;
+    }
+
+    function handleWholeColumnDelete(event, block, start, end = start) {
       if (!event.shiftKey || (event.key !== "Backspace" && event.key !== "Delete") || !block) return false;
       event.preventDefault();
+      const selection = selectedColumnRange(block, start, end);
+      if (selection) return deleteTabColumnRange(block, selection.left, selection.right);
       if (event.key === "Backspace" && block.column > 0) {
-        els.tab.setSelectionRange(start - 1, start - 1);
-        editTabColumn("delete");
+        return deleteTabColumnRange(block, block.column - 1, block.column);
       } else if (event.key === "Delete") {
-        editTabColumn("delete");
+        return deleteTabColumnRange(block, block.column, block.column + 1);
       }
       return true;
     }
@@ -3925,12 +4183,8 @@ Gsus2=300233`;
     function handleDashInput(event, block, start) {
       if (event.shiftKey || event.key !== "-" || !block) return false;
       event.preventDefault();
-      if (tabRowType(block) === "rhythm") {
-        if (els.tab.value[start] === " ") replaceTabCharacter(start, "-");
-        else insertTabColumnWithCurrentValue("-");
-      } else {
-        editTabColumn("insert", "-");
-      }
+      if (tabRowType(block) === "string") editTabColumn("insert", "-");
+      else replaceTabCharacter(start, "-");
       return true;
     }
 
@@ -3940,22 +4194,13 @@ Gsus2=300233`;
       if (event.key === "Backspace") {
         if (block.column <= 0) return false;
         event.preventDefault();
-        if (els.tab.value[start - 1] === "|") {
-          els.tab.setSelectionRange(start - 1, start - 1);
-          editTabColumn("delete");
-        } else {
+        if (els.tab.value[start - 1] !== "|") {
           clearTabCell(start - 1, start - 1, filler);
         }
         return true;
       }
       event.preventDefault();
-      if (els.tab.value[start] === "|") {
-        editTabColumn("delete");
-        if (event.key === " ") {
-          const next = Math.min(els.tab.selectionStart + 1, els.tab.value.length);
-          els.tab.setSelectionRange(next, next);
-        }
-      } else {
+      if (els.tab.value[start] !== "|") {
         clearTabCell(start, event.key === " " ? start + 1 : start, filler);
       }
       return true;
@@ -3968,7 +4213,8 @@ Gsus2=300233`;
       const current = els.tab.value[start];
       if (character === "|") {
         event.preventDefault();
-        editTabColumn("insert", "|");
+        if (rowType === "string") editTabColumn("insert", "|");
+        else replaceTabCharacter(start, "|");
         return true;
       }
       if (current === "|" && rowType === "string") {
@@ -3986,8 +4232,20 @@ Gsus2=300233`;
 
     els.tab.addEventListener("keydown", event => {
       if (handleEditorHistoryKey(event)) return;
-      if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.altKey && event.key.toLowerCase() === "v") {
+        if (!lastColumnClipboard) return;
+        event.preventDefault();
+        pasteColumnPayload(lastColumnClipboard, "insert");
+        return;
+      }
+      if (event.isComposing) return;
       const start = els.tab.selectionStart;
+      const end = els.tab.selectionEnd;
+      const startLocation = textLocationAtOffset(els.tab.value, start);
+      const bounds = tabBlockForLine(startLocation.lines, startLocation.lineIndex);
+      const block = bounds ? { value: els.tab.value, lines: startLocation.lines, lineIndex: startLocation.lineIndex, column: startLocation.column, ...bounds } : null;
+      if (handleWholeColumnDelete(event, block, start, end)) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (start !== els.tab.selectionEnd) {
         if (["Backspace", "Delete", " "].includes(event.key)) {
           event.preventDefault();
@@ -3996,8 +4254,6 @@ Gsus2=300233`;
         return;
       }
       if (createRhythmRowAtCaret(event, start)) return;
-      const block = tabBlockAtCaret();
-      if (handleWholeColumnDelete(event, block, start)) return;
       if (handleDashInput(event, block, start)) return;
       if (handleClearKey(event, block, start)) return;
       handlePrintableTabInput(event, block, start);
@@ -4574,11 +4830,21 @@ Gsus2=300233`;
       if (!els.autoScroll.checked) playbackScrollState = null;
       else if (playing) preparePlaybackAutoScroll(currentBeat());
     });
-    els.scrollModeToggle.addEventListener("click", event => {
-      const button = event.target.closest("[data-scroll-mode]");
-      if (!button) return;
-      localStorage.setItem("guitar-tab-scroll-mode", button.dataset.scrollMode);
-      els.scrollModeToggle.querySelectorAll("[data-scroll-mode]").forEach(item => item.classList.toggle("selected", item === button));
+    function setScrollMode(mode) {
+      const nextMode = mode === "jump" ? "jump" : "smooth";
+      localStorage.setItem("guitar-tab-scroll-mode", nextMode);
+      els.scrollModeToggle.querySelectorAll("[data-scroll-mode]").forEach(item => item.classList.toggle("selected", item.dataset.scrollMode === nextMode));
+      els.scrollModeHelp.textContent = nextMode === "jump" ? "当前行播完后跳到后续谱面" : "随播放进度连续跟随谱面";
+      els.scrollModeToggle.setAttribute("aria-checked", nextMode === "jump" ? "true" : "false");
+    }
+    els.scrollModeToggle.addEventListener("click", () => {
+      const current = els.scrollModeToggle.querySelector(".selected")?.dataset.scrollMode;
+      setScrollMode(current === "jump" ? "smooth" : "jump");
+    });
+    els.scrollModeToggle.addEventListener("keydown", event => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      els.scrollModeToggle.click();
     });
     els.sectionPractice.addEventListener("change", () => {
       stopPlayback();
@@ -4623,6 +4889,7 @@ Gsus2=300233`;
       renderScore();
       updateSummary();
       updateDirtyState();
+      els.layoutDialog.close();
     });
     els.toggleEditor.addEventListener("click", () => {
       const willOpen = els.editorWorkspace.hidden;
@@ -4643,7 +4910,8 @@ Gsus2=300233`;
     });
     els.validate.addEventListener("click", () => {
       const caret = els.tab.selectionStart;
-      const normalized = normalizeTabPadding(els.tab.value);
+      const separationResult = separateAdjacentFrettedNotes(els.tab.value);
+      const normalized = normalizeTabPadding(separationResult.text);
       const rhythmResult = canonicalizeRhythmLayers(normalized);
       const paddingResult = completeMeasurePadding(rhythmResult.text);
       const validated = paddingResult.text;
@@ -4654,8 +4922,9 @@ Gsus2=300233`;
         els.tab.dispatchEvent(new Event("input", { bubbles: true }));
       }
       parseScore();
-      if (rhythmResult.changedBlocks || paddingResult.changedMeasures) {
+      if (separationResult.insertedColumns || rhythmResult.changedBlocks || paddingResult.changedMeasures) {
         const details = [];
+        if (separationResult.insertedColumns) details.push(`拆分 ${separationResult.insertedColumns} 处连续拨弦`);
         if (rhythmResult.changedBlocks) details.push(`重新分层 ${rhythmResult.changedBlocks} 个含附点的节奏区块`);
         if (paddingResult.changedMeasures) details.push(`补齐 ${paddingResult.changedMeasures} 个小节的首尾空拍`);
         els.message.textContent = `内容校验完成：${details.join("；")}。`;
@@ -4899,7 +5168,7 @@ Gsus2=300233`;
     els.autoScroll.checked = localStorage.getItem("guitar-tab-auto-scroll") !== "0";
     els.scrollModeRow.hidden = !els.autoScroll.checked;
     const savedScrollMode = localStorage.getItem("guitar-tab-scroll-mode") === "jump" ? "jump" : "smooth";
-    els.scrollModeToggle.querySelectorAll("[data-scroll-mode]").forEach(button => button.classList.toggle("selected", button.dataset.scrollMode === savedScrollMode));
+    setScrollMode(savedScrollMode);
     els.capo.value = String(Math.max(-1, Math.min(6, Number(localStorage.getItem("guitar-tab-capo")) || 0)));
     els.beats.value = localStorage.getItem("guitar-tab-meter") === "6/8" ? "6/8" : "4/4";
     els.layout.value = localStorage.getItem("guitar-tab-layout") === "timed" ? "timed" : "compact";
